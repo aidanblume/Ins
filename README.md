@@ -1,4 +1,5 @@
- # Data Science Innovation Project Structure, Documents and Artifact Templates
+ # L.A. Care Data Science Innovation 
+ # Project Structure, Documents and Artifact Templates
 
 This is a general project directory structure for Team Data Science Process developed by Microsoft. It also contains templates for various documents that are required as part of executing an L.A. Care data science project. 
 
