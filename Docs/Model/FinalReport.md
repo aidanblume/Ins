@@ -1,9 +1,9 @@
 # Final Model Report
-_Report describing the final model to be delivered - typically comprised of one or more of the models built during the life of the project_
+_Report describing the final model to be delivered - typically comprised of one or more of the models built during the life of the project._
 
 ## Analytic Approach
-* What is target definition
-* What are inputs (description)
+* What is target definition?
+* What are inputs (description)?
 * What kind of model was built?
 
 ## Solution Description
@@ -23,9 +23,6 @@ _Report describing the final model to be delivered - typically comprised of one 
 
 ## Algorithm
 * Description or images of data flow graph
-  * if AzureML, link to:
-    * Training experiment
-    * Scoring workflow
 * What learner(s) were used?
 * Learner hyper-parameters
 
