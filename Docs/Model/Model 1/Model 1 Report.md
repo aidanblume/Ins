@@ -1,6 +1,6 @@
-# Baseline Model Report
+# Model 1 Report
 
-_Baseline model is the the model a data scientist would train and evaluate quickly after he/she has the first (preliminary) feature set ready for machine learning modeling. Through building the baseline model, the data scientist can have a quick assessment of the feasibility of the machine learning task._
+_A report to provide details on a specific experiment (model) - possibly one of many._
 
 
 ## Analytic Approach
