@@ -47,8 +47,9 @@
 * How will the score or operationalized solution be consumed in the business workflow of the customer? If applicable, write down pseudo code for the APIs of the web service calls.
   * How will the customer use the model results to make decisions
   * Data movement pipeline in production
-  * Make a 1 slide diagram showing the end to end data flow and decision architecture
+  * Make a 1 slide diagram showing the end to end data flow and decision architecture:
   ![alt text](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Project/Project-Artifacts/data-science-template-flow.png)
+  
     * If there is a substantial change in the customer's business workflow, make a before/after diagram showing the data flow.
 
 ## Communication
