@@ -1,16 +1,5 @@
-# Data Report
-This file will be generated for each data file received or processed. This report is where to keep the data summary, statistics, and charts that you want to use to tell the data story into the report. You only need to click a few buttons, and the report will be generated for you. 
+# Data Pipeline 
 
-## General summary of the data
-
-## Data quality summary
-
-## Target variable
-
-## Individual variables
-
-## Variable ranking
-
-## Relationship between explanatory variables and target variable
+Describe the data pipeline and provide a logical diagram. List how frequently the data is moved - real time/stream, near real time, batched with frequency etc.
 
 
