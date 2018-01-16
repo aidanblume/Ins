@@ -37,7 +37,7 @@
   * What data do we expect? Raw data in the customer data sources (e.g. on-prem files, SQL, on-prem Hadoop etc.)
 * Data movement from source systems to Cloudera Data Hub using what data movement tools (Sqoop, Flume etc.) to move either
   * all the data, 
-  * Sampled data enough for modeling 
+  * sampled data enough for modeling 
 
 * What tools and data storage/analytics resources will be used in the solution e.g.,
   * Sqoop for RDMS ingestion
