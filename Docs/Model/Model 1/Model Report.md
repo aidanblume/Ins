@@ -1,7 +1,7 @@
 # Model Report
-_A report to provide details on a specific experiment (model) - possibly one of many_
+_A report to provide details on a specific experiment (model) - possibly one of many._
 
-If applicable, the Automated Modeling and Reporting utility developed by Microsoft TDSP team can be used to generate reports, which can provide contents for most of the sections in this model report. 
+
 ## Analytic Approach
 * What is target definition
 * What are inputs (description)
