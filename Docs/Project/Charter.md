@@ -2,8 +2,8 @@
 
 ## Business background
 
-* Who is the client, what business domain the client is in.
-* What business problems are we trying to address?
+* Who is the client and what strategic business function does the client perform?
+* What business problem(s) are we trying to address?
 
 ## Scope
 * What data science solutions are we trying to build?
@@ -12,14 +12,15 @@
 
 ## Personnel
 * Who are on this project:
-	* Microsoft:
-		* Project lead
-		* PM
+	* Data Team:
 		* Data scientist(s)
-		* Account manager
-	* Client:
+		* Data subject matter expert(s)
+		* Data engineer(s)
 		* Data administrator
-		* Business contact
+	* Project Client:
+		* Business owner
+		* Business domain subject matter expert(s)
+		* Project sponsor
 	
 ## Metrics
 * What are the qualitative objectives? (e.g. reduce user churn)
@@ -34,16 +35,16 @@
 ## Architecture
 * Data
   * What data do we expect? Raw data in the customer data sources (e.g. on-prem files, SQL, on-prem Hadoop etc.)
-* Data movement from on-prem to Azure using ADF or other data movement tools (Azcopy, EventHub etc.) to move either
+* Data movement from source systems to Cloudera Data Hub using what data movement tools (Sqoop, Flume etc.) to move either
   * all the data, 
-  * after some pre-aggregation on-prem,
   * Sampled data enough for modeling 
 
 * What tools and data storage/analytics resources will be used in the solution e.g.,
-  * ASA for stream aggregation
-  * HDI/Hive/R/Python for feature construction, aggregation and sampling
-  * AzureML for modeling and web service operationalization
-* How will the score or operationalized web service(s) (RRS and/or BES) be consumed in the business workflow of the customer? If applicable, write down pseudo code for the APIs of the web service calls.
+  * Sqoop for RDMS ingestion
+  * HDFS for storage
+  * R/Python/Hive/Impala for feature construction, aggregation and sampling
+  * SparkML for modeling and operationalization
+* How will the score or operationalized solution be consumed in the business workflow of the customer? If applicable, write down pseudo code for the APIs of the web service calls.
   * How will the customer use the model results to make decisions
   * Data movement pipeline in production
   * Make a 1 slide diagram showing the end to end data flow and decision architecture
