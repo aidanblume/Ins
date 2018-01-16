@@ -1,6 +1,6 @@
  # TDSP Project Structure, and Documents and Artifact Templates
 
-This is a general project directory structure for Team Data Science Process developed by Microsoft. It also contains templates for various documents that are recommended as part of executing a data science project when using TDSP. 
+This is a general project directory structure for Team Data Science Process developed by Microsoft. It also contains templates for various documents that are required as part of executing an L.A. Care data science project. 
 
 [Team Data Science Process (TDSP)](https://docs.microsoft.com/en-us/azure/machine-learning/team-data-science-process/overview) is an agile, iterative, data science methodology to improve collaboration and team learning. It is supported through a lifecycle definition, standard project structure, artifact templates, and tools for productive data science. 
 
