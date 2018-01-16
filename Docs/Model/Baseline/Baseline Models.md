@@ -13,9 +13,6 @@ _Baseline model is the the model a data scientist would train and evaluate quick
 * Models and Parameters
 
 	* Description or images of data flow graph
-  		* if AzureML, link to:
-    		* Training experiment
-    		* Scoring workflow
 	* What learner(s) were used?
 	* Learner hyper-parameters?
 
