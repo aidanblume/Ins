@@ -25,8 +25,11 @@ Team Members: <Enter team member' names. Please also enter relevant parties name
 ##	Solution Architecture
 <Architecture of the solution, describe clearly whether this was actually implemented or a proposed architecture. Include diagram and relevant details for reproducing similar architecture. Include details of why this architecture was chosen versus other architectures that were considered, if relevant\>
 
-##	Customer Benefit
-What is the benefit (ROI, savings, productivity gains etc)  for the customer? If just POC, what is estimated ROI? If exact metrics are not available, why does it have impact for the customer?\>
+##	Internal Customer Benefit
+What is the benefit (ROI, savings, productivity gains etc) for the internal customer? If just POC, what is estimated ROI? If exact metrics are not available, why does it have impact for the customer?\>
+
+## Member Benefit
+What is the benefit for the member (if any)?
 
 ##	Learnings
 
