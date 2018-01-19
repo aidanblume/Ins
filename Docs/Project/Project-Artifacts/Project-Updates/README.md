@@ -1,3 +1,3 @@
 # Project Updates
 
-This section houses all of the project updates that are sent to key stakeholders of the specific project.
+This section houses all of the project updates that are communicated to the project's key stakeholders on a recurring basis.
