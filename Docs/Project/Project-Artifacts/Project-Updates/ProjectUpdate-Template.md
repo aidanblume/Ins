@@ -17,5 +17,8 @@ Status descriptions:
 * Barrier Two  
   * Description:  
   * Remediation efforts in progress:
+  
+## Update Notes:
+Place notes pertaining to the work that has been accomplished since the last update, as well as what is planned to be worked on soon.
 
 
