@@ -9,7 +9,7 @@ Status descriptions:
 * **Yellow**: Potentially barrier(s) identified and unresolved that may impeded project progress.
 * **Red**: Unmovable barrier(s) identified and unresolved that has significantly impeded project progress.
 
-# Existing Barriers (if any):
+## Existing Barriers (if any):
 * Barrier One
   * Description:
   * Remediation efforts in progress:
