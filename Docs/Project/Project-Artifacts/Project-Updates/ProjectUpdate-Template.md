@@ -2,6 +2,7 @@
 
 ## Lead Data Scientist / Project Lead: <Data Scientist Name>
 ## Update Date: <mm-dd-yyyy>
+## [Project Charter](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Project/Charter.md)
 
 ## Overall Project Status: Green, Yellow, or Red
 Status descriptions: 
