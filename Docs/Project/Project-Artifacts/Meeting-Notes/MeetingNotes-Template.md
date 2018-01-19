@@ -2,9 +2,9 @@
 
 ## Meeting Date Here (mm-dd-yyy)
 
-##Attendees
+## Attendees
 Jim Smith, Johnny Rockets
 
-##Notes
+## Notes
 Enter notes here.
 
