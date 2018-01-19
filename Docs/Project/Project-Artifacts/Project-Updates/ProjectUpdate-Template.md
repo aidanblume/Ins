@@ -11,6 +11,9 @@ Status descriptions:
 
 # Existing Barriers (if any):
 * Barrier One
-  * Description
+  * Description:
+  * Remediation efforts in progress:
 * Barrier Two
+ * Description:
+ * Remediation efforts in progress:
 
