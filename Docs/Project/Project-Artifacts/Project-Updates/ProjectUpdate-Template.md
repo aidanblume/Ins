@@ -6,9 +6,9 @@
 
 ## Overall Project Status: Green, Yellow, or Red
 Status descriptions: 
-* **Green**: Project moving well. No unmovable barriers have been identified that would impeded progress.
-* **Yellow**: Potentially barrier(s) identified and unresolved that may impeded project progress.
-* **Red**: Unmovable barrier(s) identified and unresolved that has significantly impeded project progress.
+* **Green**: Project moving well. No significant barriers have been identified that would impeded progress.
+* **Yellow**: Potentially significant barrier(s) identified and unresolved that may impeded project progress.
+* **Red**: Unmovable and significant barrier(s) identified and unresolved that has significantly impeded project progress.
 
 ## Existing Barriers (if any):
 * Barrier One
