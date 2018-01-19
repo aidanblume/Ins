@@ -12,7 +12,7 @@ Status descriptions:
 # Existing Barriers (if any):
 * Barrier One
   * Description:
-  * Remediation efforts in progress:
+  * Remediation efforts in progress:
 * Barrier Two  
   * Description:  
   * Remediation efforts in progress:
