@@ -11,5 +11,6 @@ Status descriptions:
 
 # Existing Barriers (if any):
 * Barrier One
+  * Description
 * Barrier Two
 
