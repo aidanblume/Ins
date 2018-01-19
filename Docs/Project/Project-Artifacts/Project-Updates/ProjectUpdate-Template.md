@@ -10,6 +10,6 @@ Status descriptions:
 * **Red**: Unmovable barrier(s) identified and unresolved that has significantly impeded project progress.
 
 # Existing Barriers (if any):
-* <Barrier One>
-* <Barrier Two>
+* Barrier One
+* Barrier Two
 
