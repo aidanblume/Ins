@@ -1,6 +1,7 @@
 # Project <Title> Update
 
-## Date (mm-dd-yyyy)
+## Lead Data Scientist / Project Lead: <Data Scientist Name>
+## Update Date: <mm-dd-yyyy>
 
 ## Overall Project Status: Green, Yellow, or Red
 Status descriptions: 
