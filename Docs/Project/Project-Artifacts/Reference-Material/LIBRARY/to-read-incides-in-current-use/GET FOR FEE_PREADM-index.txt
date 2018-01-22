@@ -1,0 +1,31 @@
+Shadmi E, Flaks-Manov N, Hoshen M, Goldman O, Bitterman H, Balicer RD,
+et al. Predicting 30-day readmissions with preadmission electronic health
+record data. Med Care. 2015;53(3):283–9.
+
+---
+Predicting 30-day readmissions with preadmission electronic health record data.
+
+Shadmi E1, Flaks-Manov N, Hoshen M, Goldman O, Bitterman H, Balicer RD.
+
+
+Abstract
+BACKGROUND:
+Readmission prevention should begin as early as possible during the index admission. Early identification may help target patients for within-hospital readmission prevention interventions.
+
+OBJECTIVES:
+To develop and validate a 30-day readmission prediction model using data from electronic health records available before the index admission.
+
+RESEARCH DESIGN:
+Retrospective cohort study of admissions between January 1 and March 31, 2010.
+
+SUBJECTS:
+Adult enrollees of Clalit Health Services, an integrated delivery system, admitted to an internal medicine ward in any hospital in Israel.
+
+MEASURES:
+All-cause 30-day emergency readmissions. A prediction score based on before admission electronic health record and administrative data (the Preadmission Readmission Detection Model-PREADM) was developed using a preprocessing variable selection step with decision trees and neural network algorithms. Admissions with a recent prior hospitalization were excluded and automatically flagged as "high-risk." Selected variables were entered into multivariable logistic regression, with a derivation (two-thirds) and a validation cohort (one-third).
+
+RESULTS:
+The derivation dataset comprised 17,334 admissions, of which 2913 (16.8%) resulted in a 30-day readmission. The PREADM includes 11 variables: chronic conditions, prior health services use, body mass index, and geographical location. The c-statistic was 0.70 in the derivation set and of 0.69 in the validation set. Adding length of stay did not change the discriminatory power of the model.
+
+CONCLUSIONS:
+The PREADM is designed for use by health plans for early high-risk case identification, presenting discriminatory power better than or similar to that of previously reported models, most of which include data available only upon discharge.
