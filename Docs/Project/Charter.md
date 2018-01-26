@@ -67,7 +67,7 @@
 
 ## Plan
 * Phases (milestones), timeline, short description of what we'll do in each phase.
-	* See Readmission_Road_Map ![alt text](https://dsghe.lacare.org/nblume/Readmissions/Docs/Project/Project-Artifacts/Project-Updates/Project-Artifacts/Readmission_Road_Map)	
+	* See the [Readmission Road Map](./Docs/Project//Project-Artifacts/Project-Updates/Readmissions_Road_Map.vsdx) 
 	* Need to list phases here. Think of what level of information will be useful. 
 
 ## Architecture
