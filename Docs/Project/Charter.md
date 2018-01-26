@@ -3,27 +3,57 @@
 ## Business background
 
 * Who is the client and what strategic business function does the client perform?
+
+	* Dino Kasdagly, COO
+	* (Interested) Katrina Miller, Chief Quality and Information Executive, Health Services
+	* (Interested) Chriss Wheeler, Dir., Care Management
+	* (Interested) Mark Ishimatsu, Dir. Risk Adjustment Strategies and Initiatives
+
 * What business problem(s) are we trying to address?
+
+	Preventable readmissions are costing money and are an adverse event. We want to reduce their rate. 
 
 ## Scope
 * What data science solutions are we trying to build?
+
+	We are trying to build a model to assign each member a score relative to the member's risk of being readmitted within 30 days of an index discharge. 
+	
+	Optionally, we will associate with that score a list of interventions that would reduce the score the most. 
+	
+	We will try to produce these scores in real time during the member's index admission.
+	
+	We may limit our population to DHS inpatients, or to patients eligible for Care Management. 
+	
 * What will we do?
+
+	We will use supervised learning methods to build a series of models that predict readmission for distinct diagnoses. 
+	
 * How is it going to be consumed by the customer?
+
+	We don't know yet as we are still looking for a concrete customer. 
 
 ## Personnel
 * Who are on this project:
 	* Data Team:
 		* Data scientist(s)
-		* Data subject matter expert(s)
+			Nathalie Blume
+		* Data subject matter expert(s) 
+			Richard Meadows, Chriss Wheeler
 		* Data engineer(s)
+			EDW Team under KJ Singh in the Oracle environment. Nathalie Blume in the Cloudera environment.
 		* Data administrator
+			EDW Team under KJ Singh in the Oracle environment. Nathalie Blume in the Cloudera environment.
 	* Project Client:
 		* Business owner
+			Brandon Shelton
 		* Business domain subject matter expert(s)
+			Chriss Wheeler
 		* Project sponsor
+			Dino Kasdagly
 	
 ## Metrics
 * What are the qualitative objectives? (e.g. reduce user churn)
+	
 * What is a quantifiable metric  (e.g. reduce the fraction of users with 4-week inactivity)
 * Quantify what improvement in the values of the metrics are useful for the customer scenario (e.g. reduce the  fraction of users with 4-week inactivity by 20%) 
 * What is the baseline (current) value of the metric? (e.g. current fraction of users with 4-week inactivity = 60%)
