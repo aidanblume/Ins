@@ -16,13 +16,10 @@
 ## Scope
 * What data science solutions are we trying to build?
 
-	We are trying to build a model to assign each member a score relative to the member's risk of being readmitted within 30 days of an index discharge. 
-	
-	Optionally, we will associate with that score a list of interventions that would reduce the score the most. 
-	
-	We will try to produce these scores in real time during the member's index admission.
-	
-	We may limit our population to DHS inpatients, or to patients eligible for Care Management. 
+	* We are trying to build a model to assign each member a score relative to the member's risk of being readmitted within 30 days of an index discharge. 
+	* Optionally, we will associate with that score a list of interventions that would reduce the score the most. 
+	* We will try to produce these scores in real time during the member's index admission.
+	* We may limit our population to DHS inpatients, or to patients eligible for Care Management. 
 	
 * What will we do?
 
@@ -53,14 +50,25 @@
 	
 ## Metrics
 * What are the qualitative objectives? (e.g. reduce user churn)
+	* Reduce readmission
+	* Not increase mortality
 	
 * What is a quantifiable metric  (e.g. reduce the fraction of users with 4-week inactivity)
+	* Reduce the fraction of members discharged from an inpatient facility who are subsequently readmitted within 30 days (I can make this more detailed in a future draft).
+	* Some measure of improvement or stability in mortality? Some measure of similarity to a control group?
+	
 * Quantify what improvement in the values of the metrics are useful for the customer scenario (e.g. reduce the  fraction of users with 4-week inactivity by 20%) 
+	* UNK
 * What is the baseline (current) value of the metric? (e.g. current fraction of users with 4-week inactivity = 60%)
+	* UNK
+	
 * How will we measure the metric? (e.g. A/B test on a specified subset for a specified period; or comparison of performance after implementation to baseline)
+	* Needs to be specified.
 
 ## Plan
 * Phases (milestones), timeline, short description of what we'll do in each phase.
+	* See Readmission_Road_Map ![alt text](https://dsghe.lacare.org/nblume/Readmissions/Docs/Project/Project-Artifacts/Project-Updates/Project-Artifacts/Readmission_Road_Map)	
+	* Need to list phases here. Think of what level of information will be useful. 
 
 ## Architecture
 * Data
@@ -84,4 +92,8 @@
 
 ## Communication
 * How will we keep in touch? Weekly meetings?
+	* Weekly 1:1 between Nathalie Blume and Brandon Shelton
+	
 * Who are the contact persons on both sides?
+	* Data Team: Nathalie Blume, x6798, nblume@lacare.org
+	* Project Client: ??
