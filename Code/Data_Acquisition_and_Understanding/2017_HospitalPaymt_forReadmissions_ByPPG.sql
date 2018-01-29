@@ -38,6 +38,7 @@ FROM #MyTable AS A INNER JOIN #MyTable AS B ON B.row# = A.row# - 1
 ORDER BY A.row# ASC
 ;
 GO
+-- select top 10 * from #MyTable2;
 DROP TABLE #MyTable;
 GO
 
@@ -79,8 +80,12 @@ FROM
 	SELECT 
 	B.fullname AS "PPG", 
 	SUM(A.totalpaid) AS "Total_Paid", 
-	SUM(A.totalpaid_30d_readmitted) AS "Total_Paid_for_30d_Readmissions"
-	--, Total_Paid_for_30d_Readmissions/Total_Paid AS "Ratio 30d to total paid"
+	--SUM(A.totalpaid_30d_readmitted) AS "Total_Paid_for_30d_Readmissions"
+	--note: use CASE below because you need to recapture PPG with 0 readmission between 2 and 30 days. 
+	CASE
+		WHEN SUM(A.totalpaid_30d_readmitted) IS NULL THEN 0
+		ELSE SUM(A.totalpaid_30d_readmitted) 
+	END AS "Total_Paid_for_30d_Readmissions"
 	FROM
 	#MyTable AS A
 	LEFT JOIN 
@@ -91,3 +96,4 @@ ORDER BY Total_Paid desc, Ratio_30d_to_total_paid
 ;
 GO
 DROP TABLE #MyTable;
+--DROP TABLE #MyTable2;
