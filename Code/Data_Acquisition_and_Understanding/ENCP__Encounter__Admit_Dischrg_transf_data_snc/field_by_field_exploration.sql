@@ -38,6 +38,7 @@ SELECT patient_class_id
     WHEN patient_class_id=98 THEN 'psychiatry'
     WHEN patient_class_id=156 THEN 'no xref'
     WHEN patient_class_id=155 THEN 'unset'
+    ELSE NULL
     END AS patient_class_description
 , COUNT(patient_class_id) AS Frequency
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -71,6 +72,7 @@ SELECT patient_type_id
     WHEN patient_type_id=105 THEN 'rehab/snf'
     WHEN patient_type_id=150 THEN 'no xref'
     WHEN patient_type_id=149 THEN 'unset'
+    ELSE NULL
     END AS patient_type_description
 , COUNT(patient_type_id) AS Frequency
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -102,6 +104,7 @@ SELECT patient_type_id
     WHEN patient_type_id=105 THEN 'rehab/snf'
     WHEN patient_type_id=150 THEN 'no xref'
     WHEN patient_type_id=149 THEN 'unset'
+    ELSE NULL
     END AS patient_type_description
 , COUNT(patient_type_id) AS Frequency
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -111,7 +114,8 @@ GROUP BY patient_type_id
 ;
 
 --ADMIT_SOURCE_ID and _TYPE: i.e. where was the member before their admit
-SELECT admit_source_id
+SELECT 
+admit_source_id
 , CASE
     WHEN admit_source_id=22 THEN 'affiliated hospital referral'
     WHEN admit_source_id=87 THEN 'affiliated hospital transfer'
@@ -138,42 +142,7 @@ SELECT admit_source_id
     WHEN admit_source_id=89 THEN 'self referral'
     WHEN admit_source_id=146 THEN 'No Xref'
     WHEN admit_source_id=145 THEN 'unset'
-    END AS admit_source_description
-, COUNT(admit_source_id) AS Frequency
-FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
-WHERE ds_visit_type_id = 70 --inpatient visits only. So result here should only be inpatient class. 
-AND DS_VISIT_STATUS_ID = 75 
-GROUP BY admit_source_id
-;
-
---ADMIT_SOURCE_ID and _TYPE: i.e. where was the member before their admit
-SELECT admit_source_id
-, CASE
-    WHEN admit_source_id=22 THEN 'affiliated hospital referral'
-    WHEN admit_source_id=87 THEN 'affiliated hospital transfer'
-    WHEN admit_source_id=14 THEN 'affiliated outpatient referral'
-    WHEN admit_source_id=20 THEN 'clinic specialty referral'
-    WHEN admit_source_id=17 THEN 'emergency'
-    WHEN admit_source_id=69 THEN 'home health service transfer'
-    WHEN admit_source_id=19 THEN 'law'
-    WHEN admit_source_id=21 THEN 'managed care referral'
-    WHEN admit_source_id=121 THEN 'newborn'
-    WHEN admit_source_id=68 THEN 'non affiliated hospital'
-    WHEN admit_source_id=13 THEN 'non affiliated hospital referral'
-    WHEN admit_source_id=67 THEN 'non affiliated hospital transfer'
-    WHEN admit_source_id=88 THEN 'non affiliated hospital transfer'
-    WHEN admit_source_id=23 THEN 'non affiliated outpatient referral'
-    WHEN admit_source_id=16 THEN 'other'
-    WHEN admit_source_id=122 THEN 'outpatient'
-    WHEN admit_source_id=63 THEN 'outpatient transfer'
-    WHEN admit_source_id=24 THEN 'physician referral'
-    WHEN admit_source_id=64 THEN 'rehab/snf'
-    WHEN admit_source_id=18 THEN 'rehab/snf referral'
-    WHEN admit_source_id=15 THEN 'rehab/snf referral'
-    WHEN admit_source_id=66 THEN 'rehab/snf transfer'
-    WHEN admit_source_id=89 THEN 'self referral'
-    WHEN admit_source_id=146 THEN 'No Xref'
-    WHEN admit_source_id=145 THEN 'unset'
+    ELSE NULL
     END AS admit_source_description
 , COUNT(admit_source_id) AS Frequency
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -183,7 +152,8 @@ GROUP BY admit_source_id
 ;
 
 --what is the relationship between this field and others identifying visit type?
-SELECT admit_type_id
+SELECT 
+admit_type_id
 , CASE
     WHEN admit_type_id=9 THEN 'emergency room'
     WHEN admit_type_id=137 THEN 'inpatient'
@@ -196,6 +166,7 @@ SELECT admit_type_id
     WHEN admit_type_id=8 THEN 'urgent care'
     WHEN admit_type_id=154 THEN 'No Xref'
     WHEN admit_type_id=153 THEN 'Unset'
+    ELSE NULL
     END AS admit_type_description
 , COUNT(admit_type_id) AS Frequency
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -214,24 +185,93 @@ GROUP BY EXTRACT(YEAR FROM ADMIT_DATE)
 ORDER BY  EXTRACT(YEAR FROM ADMIT_DATE) DESC
 ;
 
---HOW MUCH DATA YESTERDAY? 4 DAYS AGO? 30 DAYS AGO? HOW MUCH "IN FUTURE"/error?
+--HOW MUCH DATA YESTERDAY? 4 DAYS AGO? 30 DAYS AGO? 
+--NOTE THAT FUTURE DATES ARE NOT IN ERROR. As Per Tony Truong, some facilities enter dates a member is expected to arrive for a scheduled inpatient admission.
 SELECT COUNT(*)
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 WHERE ds_visit_type_id = 70 --INPATIENT
 AND ADMIT_DATE IS NOT NULL
-AND ADMIT_DATE BETWEEN '29-JAN-18' AND '30-JAN-18'
+AND ADMIT_DATE BETWEEN DATE '1-JAN-18' AND DATE '2-JAN-18' --Note the use of DATE as explained here by user Ben: https://stackoverflow.com/questions/20171768/using-sql-query-with-group-by-date
 ORDER BY ADMIT_DATE DESC
 ;
---226
---30 dates for today (possibly in error)
---50 dates in the future (clear error)
+--Daily admissions increase over time. Retrospective data entry? Some facilities add data later than others? Ask Tony Truong. 
+--> see CREATED date field to figure this out
+--30 dates for today 
+--50 dates in the future (possibly in error --> no, some facilities are prospective. Though the 2020 year is probably an error)
 
-
---RECENCY OF ADMIT DATA (run on 2/1)
-SELECT *
+SELECT 
+TRUNC(ADMIT_DATE)
+, Count(ADMIT_DATE) AS "Frequency Admit"
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 WHERE ds_visit_type_id = 70 --INPATIENT
-AND ADMIT_DATE IS NOT NULL
---AND ADMIT_DATE BETWEEN '31-JAN-18' AND '01-FEB-18'
-ORDER BY ADMIT_DATE DESC
+AND EXTRACT(YEAR FROM ADMIT_DATE) IN (2018)
+GROUP BY TRUNC(ADMIT_DATE)
+ORDER BY TRUNC(ADMIT_DATE) DESC
 ;
+
+--DISCHARGE DATE
+--Note for grouping by a date firled in ADT?eConnect: ts not clear what your table schema is, but I suspect that system_date is a datetime field, not a date field, this means that your grouping is being done incorrectly and also includes the time portion of the field.
+--Note that there are no future dates here. 
+--****ASK TONY TRUONG: IF A READMIT HAPPENS <24 HRS< IS IT RECLASSIFIED AS A CONTINUOUS ADMIT? That would be standard practice. COULD THIS EXPLAIN THE UNCERTAINTY IN ADMITS ABOUT 1 DAY OLD?
+SELECT 
+TRUNC(DISCHARGE_DATE)
+, COUNT(DISCHARGE_DATE) AS "Frequency"
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND EXTRACT(YEAR FROM ADMIT_DATE) IN (2018)
+GROUP BY TRUNC(DISCHARGE_DATE)
+ORDER BY TRUNC(DISCHARGE_DATE) DESC
+;
+
+--DISCHARGE_DISPO_ID
+--****ASK TONY TRUONG: These codes are from the data dictionary but most codes used for this field are not in the dictionary, and most codes in the dictionary are not used in this field. Need update dictionary?
+SELECT 
+DISCHARGE_DISPO_ID
+, CASE
+  WHEN DISCHARGE_DISPO_ID='1' THEN 'Home'
+  WHEN DISCHARGE_DISPO_ID='2' THEN 'S/T Hospital'
+  WHEN DISCHARGE_DISPO_ID='3' THEN	'SNF'
+  WHEN DISCHARGE_DISPO_ID='4' THEN	'SNF'
+  WHEN DISCHARGE_DISPO_ID='5' THEN	'Institution'
+  WHEN DISCHARGE_DISPO_ID='6' THEN	'Home'
+  WHEN DISCHARGE_DISPO_ID='7' THEN	'AMA'
+  WHEN DISCHARGE_DISPO_ID='8' THEN	'Home'
+  WHEN DISCHARGE_DISPO_ID='9' THEN	'Hospital'
+  WHEN DISCHARGE_DISPO_ID='20' THEN	'Expired'
+  WHEN DISCHARGE_DISPO_ID='30' THEN	'Hospital'
+  WHEN DISCHARGE_DISPO_ID='40' THEN	'Expired'
+  WHEN DISCHARGE_DISPO_ID='41' THEN	'Expired'
+  WHEN DISCHARGE_DISPO_ID='42' THEN	'Expired'
+  WHEN DISCHARGE_DISPO_ID='43' THEN	'Fed Hospital'
+  WHEN DISCHARGE_DISPO_ID='50' THEN	'Hospice'
+  WHEN DISCHARGE_DISPO_ID='51' THEN	'Hospice'
+  WHEN DISCHARGE_DISPO_ID='61' THEN	'Hospital'
+  WHEN DISCHARGE_DISPO_ID='62' THEN	'Transfer-Rehab Fac'
+  WHEN DISCHARGE_DISPO_ID='64' THEN	'Transfer Nursing Facility/Custodial Care'
+  WHEN DISCHARGE_DISPO_ID='99' THEN	'Other'
+  WHEN DISCHARGE_DISPO_ID='UNS' THEN	'Unset'
+  WHEN DISCHARGE_DISPO_ID='NX'	 THEN 'No Xref'
+  ELSE NULL
+  END AS Discharge_dispo_description
+, COUNT(DISCHARGE_DISPO_ID)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND EXTRACT (YEAR FROM DISCHARGE_DATE) IN (2017, 2018)
+GROUP BY DISCHARGE_DISPO_ID
+;
+
+--discharge_lication_id
+--TONY TRUONG: no id code explanation in the data dictionary. Freeform field? Lots of variety in the input.
+SELECT DISTINCT DISCHARGE_LOCATION_ID
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+;
+
+--ACCOUNT_NUMBER
+--DIctionary says "The account number used to link ADT messages; typically PID.18." TONY TRUONG: please explain?
+SELECT ACCOUNT_NUMBER
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ROWNUM <= 10
+;
+
+
