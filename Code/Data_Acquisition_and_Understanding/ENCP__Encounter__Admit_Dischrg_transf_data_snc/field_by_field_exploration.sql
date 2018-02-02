@@ -1,3 +1,15 @@
+/*
+DESCRIPTION: Exploration of the eConnect/ADT database 
+AU: Nathalie Blume
+PROJECT: Readmission Rate Reduction
+
+ACTIONS:
+Contact Tony Truong to get answers to the following questions:
+-
+-
+-
+*/
+
 --ROW SELECTION. NOTE DIFFERENCE BETWEEN INDEX AND RELATIVE(30d) READMISSIONS
 SELECT *
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -187,13 +199,20 @@ ORDER BY  EXTRACT(YEAR FROM ADMIT_DATE) DESC
 
 --HOW MUCH DATA YESTERDAY? 4 DAYS AGO? 30 DAYS AGO? 
 --NOTE THAT FUTURE DATES ARE NOT IN ERROR. As Per Tony Truong, some facilities enter dates a member is expected to arrive for a scheduled inpatient admission.
+--Note the use of DATE below conforms with Ben's explanation here: https://stackoverflow.com/questions/20171768/using-sql-query-with-group-by-date
 SELECT COUNT(*)
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 WHERE ds_visit_type_id = 70 --INPATIENT
-AND ADMIT_DATE IS NOT NULL
-AND ADMIT_DATE BETWEEN DATE '1-JAN-18' AND DATE '2-JAN-18' --Note the use of DATE as explained here by user Ben: https://stackoverflow.com/questions/20171768/using-sql-query-with-group-by-date
+--AND ADMIT_DATE IS NOT NULL
+--AND TRUNC(ADMIT_DATE)='1-FEB-2018' --294
+--AND TRUNC(ADMIT_DATE)='31-JAN-2018' --411
+AND TRUNC(ADMIT_DATE)='1-JAN-2018' --796
 ORDER BY ADMIT_DATE DESC
 ;
+--AND TRUNC(ADMIT_DATE) BETWEEN DATE '1-FEB-2018' AND DATE '2-FEB-2018' 
+--AND TRUNC(ADMIT_DATE) BETWEEN DATE '31-JAN-2018' AND DATE '1-JAN-2018' 
+--AND TRUNC(ADMIT_DATE) BETWEEN DATE '1-JAN-2018' AND DATE '2-JAN-2018' 
+
 --Daily admissions increase over time. Retrospective data entry? Some facilities add data later than others? Ask Tony Truong. 
 --> see CREATED date field to figure this out
 --30 dates for today 
@@ -416,3 +435,4 @@ FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 GROUP BY LOCATION_TYPE
 ; 
 --many nulls
+
