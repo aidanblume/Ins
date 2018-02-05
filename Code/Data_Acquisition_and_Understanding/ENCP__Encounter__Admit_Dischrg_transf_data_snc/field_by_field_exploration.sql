@@ -575,6 +575,374 @@ ORDER BY RECORDING_DELAY DESC;
 
 What data here are useful for a readmission model?
 
+demographics: --> age (DOB)
+
+cur_LOB --> how the member signed up & who is financially responsible may impart readmission
+
+what service admitted the patient (ER, inpatient, psychiatry, etc.) --> urgent services may offer lesser quality care; other levels of the factor may be associated with diagnosis.
+    - serviciing_facility_id
+    - ds_visit_type_id
+    - patient_class_id
+    - patient_type_id
+    + location_point_of_service
+    + hospital_service_id
+    
+phone & phone_type --> may indicate both level of social support (proving someone else's phone number) and fnuctional level (having a phone)
+
+admitting_physician
+attending_aa
+attending_id
+    --> i could compute the number of admissions for that person per unit of time to show over-burden and hence effect on quality of care
+    --> i could also detect patterns where certain physicians have more readmits
+    
+diag_priority
+
+Dx? --> diag_code; diag_text? admit_reason_id?  admit_type_id? + diag_type
+
+source facility --> source_facility_id; admit_source_id; 
+
+admit_date
+
+discharge_date
+discharge_dispo
+discharge_location
+
+readmit <24hrs? --> look at dates: created, admit_date; last_modified; visit_status_date; discharge_status_date; last_touch_date.
+
+
+
+-- diagnoses
+-- day and time of day admitted
+-- day and time of day discharged
+-- transfers as source or endpoint
+-- can I detect the presence of a <24 hour discharge taht would be invisible in billing records?
+-- link to demographic data for the member
+-- type of facility
+-- type of facility/situation from which the patient was admitted
+-- type of facility/situation to which the patient was discharged/transfered
+-- language (60% populated)
+
 */
 
+--DEMOGRAPHICS
+--negative ages? only if you write a bad timedif query in oracle. 
+SELECT 
+ FLOOR(MONTHS_BETWEEN(ADMIT_DATE, DOB) / 12) AS age
+, FLOOR(MONTHS_BETWEEN(TO_DATE(ADMIT_DATE), TO_DATE(DOB)) / 12) AS badage
+, TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) AS age2
+, ADMIT_DATE, DOB
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE TO_DATE(ADMIT_DATE) BETWEEN '1-JAN-2018' AND '1-FEB-2018'
+AND FLOOR(MONTHS_BETWEEN(TO_DATE(ADMIT_DATE), TO_DATE(DOB)) / 12) < 0
+AND ROWNUM <= 10
+;
 
+--age distribution over 1 month, 1 month ago
+SELECT TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) AS age, count(TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12)) AS frequency
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE TO_DATE(ADMIT_DATE) BETWEEN '1-JAN-2018' AND '1-FEB-2018'
+GROUP BY TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12)
+ORDER BY AGE
+;
+
+--by age group (decades) over 1 month, 1 month ago
+SELECT agegroup, count(agegroup) AS frequency
+FROM
+  (
+  SELECT 
+    CASE
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <10 THEN '0-9'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <20 THEN '10-19'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <30 THEN '20-29'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <40 THEN '30-39'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <50 THEN '40-49'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <60 THEN '50-59'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <70 THEN '60-69'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <80 THEN '70-79'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <90 THEN '80-89'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <100 THEN '90-99'
+    ELSE 'older'
+    END AS agegroup
+  FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+  WHERE TO_DATE(ADMIT_DATE) BETWEEN '1-JAN-2018' AND '1-FEB-2018'
+  ) S
+GROUP BY agegroup
+ORDER BY agegroup
+;
+
+--age distribution 1 day, 1 week ago (1st pass at seeing age differential in recentcy of the data)
+SELECT agegroup, count(agegroup) AS frequency
+FROM
+  (
+  SELECT 
+    CASE
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <10 THEN '0-9'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <20 THEN '10-19'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <30 THEN '20-29'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <40 THEN '30-39'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <50 THEN '40-49'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <60 THEN '50-59'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <70 THEN '60-69'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <80 THEN '70-79'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <90 THEN '80-89'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <100 THEN '90-99'
+    ELSE 'older'
+    END AS agegroup
+  FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+  WHERE TO_DATE(ADMIT_DATE) BETWEEN '28-JAN-2018' AND '29-JAN-2018'
+  ) S
+GROUP BY agegroup
+ORDER BY agegroup
+;
+--age distribution yesterday (1st pass at seeing age differential in recentcy of the data)
+SELECT agegroup, count(agegroup) AS frequency
+FROM
+  (
+  SELECT 
+    CASE
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <10 THEN '0-9'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <20 THEN '10-19'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <30 THEN '20-29'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <40 THEN '30-39'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <50 THEN '40-49'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <60 THEN '50-59'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <70 THEN '60-69'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <80 THEN '70-79'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <90 THEN '80-89'
+    WHEN TRUNC(MONTHS_BETWEEN(ADMIT_DATE, DOB)/12) <100 THEN '90-99'
+    ELSE 'older'
+    END AS agegroup
+  FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+  WHERE TO_DATE(ADMIT_DATE) BETWEEN '4-FEB-2018' AND '5-FEB-2018'
+  ) S
+GROUP BY agegroup
+ORDER BY agegroup
+;
+--growth
+0-9	    3.215189873   --- may indicate that births are recorded more quickly (less likely to be an inpatient emergency)
+10-19	  2.746987952   --- youths' admissions are reported quickest (least growth after 1st day until presumed ceiling is reached)
+20-29	  3.92481203
+30-39	  4.540540541   --- interesting that middle age is associated with later recording of event in the eConnect EHR
+40-49	  4.710144928
+50-59	  4.848214286
+60-69	  3.605769231
+70-79	  5.466666667   --- oldest members are recorded latest. To do with <24 hour readmission?
+80-89	  6.5
+90-99	  5.2
+
+--LINE OF BUSINESS
+SELECT cur_lob, COUNT(CUR_LOB)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE TO_DATE(ADMIT_DATE) BETWEEN '1-JAN-2017' AND '5-FEB-2018'
+GROUP BY CUR_LOB
+;
+/*
+HKID	43        ---> healthy kids LA
+CFST	18553     ---> ?
+BCSC	19941     ---> ?
+HBEX	9079      ---> California Health Benefits Exchange (also known as “Health Insurance Marketplace” by DHHS and “Covered California”
+KAIS	1069      ---> ?
+COMM	804       ---> ?
+CMC	25839       ---> cal mediConnect
+MCLA	1168606   ---> direct medi-cal product line
+PASC	11867     ---> homecare workers who meet the PASC eligibility requirement for health coverage
+--with time filter
+HKID	4
+BCSC	10045
+CFST	9646
+HBEX	6785
+KAIS	676
+CMC	16333
+MCLA	764080
+PASC	8247
+*/
+
+/*
+what service admitted the patient (ER, inpatient, psychiatry, etc.) --> urgent services may offer lesser quality care; other levels of the factor may be associated with diagnosis.
+    - ds_visit_type_id
+    - patient_class_id
+    - patient_type_id
+    + location_point_of_service
+*/
+
+SELECT DISTINCT ds_visit_type_id 
+--SELECT COUNT(DISTINCT ds_visit_type_id) --2
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 70=iNPATIENT; 72=ER  
+
+--SELECT DISTINCT patient_class_id 
+SELECT COUNT(DISTINCT patient_class_id) --2
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 59= ER; 86= outpatient; 61= pre; 62=inpatient
+--INPATIENTS can be inpatient or pre; ER can be er, pre or outpatient
+SELECT DISTINCT DS_VISIT_TYPE_ID, PATIENT_CLASS_ID
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+ORDER BY ds_visit_type_id, patient_class_id
+; 
+
+SELECT DISTINCT patient_type_id 
+--SELECT COUNT(DISTINCT patient_type_id) --2
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 10 types. Covers community programs, er, home health svc, inpatient, lab, med/surg, newborn, etc. See dictionary.
+SELECT DISTINCT DS_VISIT_TYPE_ID, patient_type_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+ORDER BY ds_visit_type_id, patient_type_id
+; 
+
+SELECT DISTINCT location_point_of_care 
+--SELECT COUNT(DISTINCT location_point_of_care) --2
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- freeform
+
+
+/*
+which facility?    
+*/
+--SELECT DISTINCT SERVICING_FACILITY_ID 
+SELECT COUNT(DISTINCT SERVICING_FACILITY_ID)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 3-DIGIT NUMERIC CODE; 34 OF THEM
+
+--hospital_service_id????
+SELECT DISTINCT hospital_service_id 
+--SELECT COUNT(DISTINCT hospital_service_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 3-DIGIT NUMERIC CODE; 51 OF THEM
+/***********************TONY: WHAT IS THIS???? more specific than facility/hospital***************
+
+
+/*    
+phone & phone_type --> may indicate both level of social support (proving someone else's phone number) and fnuctional level (having a phone)
+*/
+SELECT COUNT(*) 
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE PHONE IS NOT NULL
+; --1254991
+SELECT COUNT(*) 
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE PHONE IS NULL
+; --810
+
+SELECT DISTINCT(phone_type)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+;
+--can use this to indicate temporary (DATA) or emergency phone, possibly?
+SELECT phone_type, count(phone_type)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+group by phone_type
+;
+-- very few "emergency" or "data". Biggest difference is between H(home) & a bunch of things that mean "mobile", but even so the intention behindthese distinctions is unclear.
+
+/*
+admitting_physician
+attending_aa
+attending_id
+    --> i could compute the number of admissions for that person per unit of time to show over-burden and hence effect on quality of care
+    --> i could also detect patterns where certain physicians have more readmits
+*/
+SELECT count(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where admitting_physician is not null
+; --720,378
+SELECT count(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where admitting_physician is null
+; --535423 -- surbrisingly high number of null entries
+--
+SELECT count(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where attending_aa is null
+; --785,261
+--
+SELECT count(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where attending_id is null
+; --68,943 --> this is a smaller number than fields attending_aa and admitting_physician
+--what about using info from any of the 3 fields? What's still null -- i.e. null across all 3 fields?
+SELECT count(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where attending_id is null
+and attending_aa is null
+and admitting_physician is null
+; --62,306
+
+
+/* 
+diag_priority
+*/
+SELECT distinct diag_priority
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- null. This field is not usefull at all
+
+
+/*
+Dx? --> diag_code; diag_text? admit_reason_id?  admit_type_id? + diag_type
+*/
+SELECT distinct diag_code
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; --null
+SELECT distinct diag_text
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; --null
+
+SELECT count(distinct admit_reason_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; --THIS HAS INFO********************************************************* may require text analysis
+SELECT admit_reason_id, count(admit_reason_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+group by admit_reason_id
+; 
+---
+SELECT distinct admit_type_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; --a3 digit codes: Ref is in the DATA DICTIONARY.
+SELECT 
+admit_type_id
+, CASE
+    WHEN admit_type_id=9 THEN 'emergency room'
+    WHEN admit_type_id=137 THEN 'inpatient'
+    WHEN admit_type_id=138 THEN 'lab'
+    WHEN admit_type_id=7 THEN 'newborn'
+    WHEN admit_type_id=11 THEN 'other'
+    WHEN admit_type_id=10 THEN 'outpatient'
+    WHEN admit_type_id=12 THEN 'rehab/snf'
+    WHEN admit_type_id=90 THEN 'self referral'
+    WHEN admit_type_id=8 THEN 'urgent care'
+    WHEN admit_type_id=154 THEN 'No Xref'
+    WHEN admit_type_id=153 THEN 'Unset'
+    ELSE NULL
+    END AS admit_type_description
+, COUNT(admit_type_id) AS Frequency
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+GROUP BY admit_type_id
+ORDER BY admit_type_id
+;
+
+
+
+
+/*
+source facility --> source_facility_id; admit_source_id; 
+
+admit_date
+
+discharge_date
+discharge_dispo
+discharge_location
+
+readmit <24hrs? --> look at dates: created, admit_date; last_modified; visit_status_date; discharge_status_date; last_touch_date.
+
+
+
+-- diagnoses
+-- day and time of day admitted
+-- day and time of day discharged
+-- transfers as source or endpoint
+-- can I detect the presence of a <24 hour discharge taht would be invisible in billing records?
+-- link to demographic data for the member
+-- type of facility
+-- type of facility/situation from which the patient was admitted
+-- type of facility/situation to which the patient was discharged/transfered
+-- language (60% populated)
+
+*/
