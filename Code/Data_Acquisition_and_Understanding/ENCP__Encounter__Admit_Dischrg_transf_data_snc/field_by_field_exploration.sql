@@ -5,9 +5,25 @@ PROJECT: Readmission Rate Reduction
 
 ACTIONS:
 Contact Tony Truong to get answers to the following questions:
--
--
--
+
+//WAIT UNTIL YOU SEE HIS ANALYTICS REPORT THIS WEEK
+
+- Daily admissions increase over time. Retrospective data entry? Some facilities add data later than others? Get info on which factors affect early vs. on-time vs. late reporting of admissions, transfers and discharges
+- IF A READMIT HAPPENS <24 HRS< IS IT RECLASSIFIED AS A CONTINUOUS ADMIT? 
+- DISCHARGE_date: IF A READMIT HAPPENS <24 HRS< IS IT RECLASSIFIED AS A CONTINUOUS ADMIT? That would be standard practice. COULD THIS EXPLAIN THE UNCERTAINTY IN ADMITS ABOUT 1 DAY OLD?
+- --DISCHARGE_DISPO_ID: These codes are from the data dictionary but most codes used for this field are not in the dictionary, and most codes in the dictionary are not used in this field. Need update dictionary?
+- DISCHARGE_location_ID: no id code explanation in the data dictionary. Freeform field? Lots of variety in the input.
+-ACCOUNT_NUMBER: DIctionary says "The account number used to link ADT messages; typically PID.18." TONY TRUONG: please explain?
+-SOURCE_FACILITY_ID: How is this field different from HOSPITAL_SERVICE_ID? What about SERVICING_FACILITY_ID? from dictionary:
+      hospital_service_id: SNC Hospital Serv. Coded from HL7 (PV1.10)  
+      source_facility_id: Hospital Facility ID as sent to SNC, typically coded from MSH.4.
+      servicing_facility_id: Servicing facility if sent, typically coded from PV1.39.
+-diag_coding_method: --EVERYTHING IS NULL. iS THIS WHERE i SHOULD LEARN WHETHER, E.G., THE DIAG CODE IS ON OCD9 OR 10? 
+- recoding_delay: THIS DOESN'T CAPTURE THE DELAY I SEE WHEN I TRACK THE DATE THE ADMIT ITEM ACTUALLY APPEARS IN THE ECONNECT SYSTEM IN ON OUR END. IS THAT BECAUSE OF THE ADDED DELAY (AFTER ROW CREATION) IN UPDATING OUR END?
+- DS_VISIT_STATUS_DATE: I don't understand this field
+- DISCHARGE_STATUS_DATE: I don't understand this field
+--LAST_TOUCH_DATE: what's the difference between LAST_TOUCH_DATE and last_modified?
+
 */
 
 --ROW SELECTION. NOTE DIFFERENCE BETWEEN INDEX AND RELATIVE(30d) READMISSIONS
@@ -279,7 +295,7 @@ AND EXTRACT (YEAR FROM DISCHARGE_DATE) IN (2017, 2018)
 GROUP BY DISCHARGE_DISPO_ID
 ;
 
---discharge_lication_id
+--discharge_location_id
 --TONY TRUONG: no id code explanation in the data dictionary. Freeform field? Lots of variety in the input.
 SELECT DISTINCT DISCHARGE_LOCATION_ID
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -551,3 +567,14 @@ FROM (
 ) S
 GROUP BY RECORDING_DELAY
 ORDER BY RECORDING_DELAY DESC;
+
+-----------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------
+
+/*
+
+What data here are useful for a readmission model?
+
+*/
+
+
