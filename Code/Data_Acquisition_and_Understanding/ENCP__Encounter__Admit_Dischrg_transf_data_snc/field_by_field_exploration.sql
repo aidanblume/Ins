@@ -1,13 +1,13 @@
 /*
-DESCRIPTION: Exploration of the eConnect/ADT database 
+From Oracle SQL: ENCP database, ENCOUNTER schema, ADMIT_DISCHRG_TRANSF_DATA_SNC table
+
+DESCRIPTION: Exploration of the eConnect/ADT database for the purpose of predicting readmission
+
 AU: Nathalie Blume
 PROJECT: Readmission Rate Reduction
 
-ACTIONS:
+ACTIONS: //WAIT UNTIL YOU SEE HIS ANALYTICS REPORT THIS WEEK
 Contact Tony Truong to get answers to the following questions:
-
-//WAIT UNTIL YOU SEE HIS ANALYTICS REPORT THIS WEEK
-
 - Daily admissions increase over time. Retrospective data entry? Some facilities add data later than others? Get info on which factors affect early vs. on-time vs. late reporting of admissions, transfers and discharges
 - IF A READMIT HAPPENS <24 HRS< IS IT RECLASSIFIED AS A CONTINUOUS ADMIT? 
 - DISCHARGE_date: IF A READMIT HAPPENS <24 HRS< IS IT RECLASSIFIED AS A CONTINUOUS ADMIT? That would be standard practice. COULD THIS EXPLAIN THE UNCERTAINTY IN ADMITS ABOUT 1 DAY OLD?
@@ -23,7 +23,7 @@ Contact Tony Truong to get answers to the following questions:
 - DS_VISIT_STATUS_DATE: I don't understand this field
 - DISCHARGE_STATUS_DATE: I don't understand this field
 --LAST_TOUCH_DATE: what's the difference between LAST_TOUCH_DATE and last_modified?
-
+--there are duplicates. Why? [show code]
 */
 
 --ROW SELECTION. NOTE DIFFERENCE BETWEEN INDEX AND RELATIVE(30d) READMISSIONS
@@ -810,6 +810,22 @@ FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 ; -- 3-DIGIT NUMERIC CODE; 51 OF THEM
 /***********************TONY: WHAT IS THIS???? more specific than facility/hospital***************
 
+/*
+source facility --> source_facility_id; admit_source_id; 
+*/
+SELECT distinct source_facility_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 3 digit codes
+SELECT count(distinct source_facility_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 32 of them
+--
+SELECT distinct admit_source_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 3 digit codes
+SELECT count(distinct admit_source_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+; -- 22 of them
 
 /*    
 phone & phone_type --> may indicate both level of social support (proving someone else's phone number) and fnuctional level (having a phone)
@@ -918,12 +934,7 @@ GROUP BY admit_type_id
 ORDER BY admit_type_id
 ;
 
-
-
-
 /*
-source facility --> source_facility_id; admit_source_id; 
-
 admit_date
 
 discharge_date
@@ -931,9 +942,118 @@ discharge_dispo
 discharge_location
 
 readmit <24hrs? --> look at dates: created, admit_date; last_modified; visit_status_date; discharge_status_date; last_touch_date.
+*/
+
+SELECT admit_date, count(admit_date)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+group by admit_reason_id
+; 
+/*
+--can i create a temporary table? NO
+create global temporary table myTable
+on commit preserve rows
+as select * from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where rownum <= 10; 
+
+--can I create a view? NO
+create view myView 
+as select * from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where rownum <= 10; 
+*/
 
 
 
+-- Add to each row the number of days since last inpatient service, allowing NULL when the service is the 1st for enrollee in time period of query.
+SELECT DAYS_SINCE_LAST_SERVICE, COUNT(*)
+FROM
+  (
+  SELECT 
+  A.row#, A.member_id, A.admit_date, A.discharge_date, A.HOSPITAL_SERVICE_ID, 
+  B.discharge_date AS "enddate_of_last_service", 
+  CASE
+    when A.member_id = B.member_id THEN (A.ADMIT_DATE - B.discharge_date) --WHEN A.member_id = B.member_id THEN TRUNC(A.admit_date) - TRUNC(B.discharge_date) --DATEDIFF(d, B.startdate, A. enddate) ----TRUNC(DAYS_BETWEEN(A.ADMIT_DATE, B.DISCHARGE_DATE)) --
+    ELSE NULL
+  END AS days_since_last_service
+  FROM 
+  (
+    -- Create a temporary table of enrollid's inpatient services with start and end dates & total paid.
+    SELECT 
+    ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#, 
+    HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id
+    FROM 
+    (
+      select distinct visit_guid, member_id, admit_date, discharge_date, member_id, ds_visit_type_id
+      from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+    )
+    WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) = '2017'
+  ) A 
+  INNER JOIN 
+  (
+    -- Create a temporary table of enrollid's inpatient services with start and end dates & total paid.
+    SELECT 
+    ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#, 
+    HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id
+    from
+    (
+      select distinct visit_guid, member_id, admit_date, discharge_date, member_id, ds_visit_type_id
+      from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+    )
+    WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) = '2017'
+  )B 
+  ON B.row# = A.row# - 1
+  --ORDER BY A.row# ASC
+  )
+GROUP BY DAYS_SINCE_LAST_SERVICE
+ORDER BY DAYS_SINCE_LAST_SERVICE
+;
+
+
+/*
+SELECT 
+B.fullname AS "PPG", A.totalpaid, A.totalpaid_30d_readmitted
+FROM
+#MyTable AS A
+LEFT JOIN 
+CSNLACSQL01_Plandata.dbo.provider AS B ON A.provid = B.provid;
+*/
+
+SELECT PPG, Total_Paid, Total_Paid_for_30d_Readmissions
+, CASE
+	WHEN Total_Paid IS NULL THEN NULL
+	WHEN Total_Paid != 0 THEN Total_Paid_for_30d_Readmissions/Total_Paid 
+	ELSE NULL
+END AS "Ratio_30d_to_total_paid"
+FROM
+(
+	SELECT 
+	B.fullname AS "PPG", 
+	SUM(A.totalpaid) AS "Total_Paid", 
+	--SUM(A.totalpaid_30d_readmitted) AS "Total_Paid_for_30d_Readmissions"
+	--note: use CASE below because you need to recapture PPG with 0 readmission between 2 and 30 days. 
+	CASE
+		WHEN SUM(A.totalpaid_30d_readmitted) IS NULL THEN 0
+		ELSE SUM(A.totalpaid_30d_readmitted) 
+	END AS "Total_Paid_for_30d_Readmissions"
+	FROM
+	#MyTable AS A
+	LEFT JOIN 
+	CSNLACSQL01_Plandata.dbo.provider AS B ON A.provid = B.provid
+	GROUP BY B.fullname
+) AS C
+ORDER BY Total_Paid desc, Ratio_30d_to_total_paid
+;
+GO
+DROP TABLE #MyTable;
+--DROP TABLE #MyTable2;
+
+
+
+
+
+
+
+
+/*
 -- diagnoses
 -- day and time of day admitted
 -- day and time of day discharged

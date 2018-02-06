@@ -14,7 +14,6 @@ AU: NBlume
 PROJECT: Readmissions
 */
 
-
 -- Create a temporary table of enrollid's inpatient services with start and end dates & total paid.
 SELECT 
 ROW_NUMBER() OVER(ORDER BY enrollid, startdate ASC) AS row#, 
