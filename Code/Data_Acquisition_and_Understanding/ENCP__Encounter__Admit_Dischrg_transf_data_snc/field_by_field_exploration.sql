@@ -964,10 +964,14 @@ where rownum <= 10;
 
 -- Add to each row the number of days since last inpatient service, allowing NULL when the service is the 1st for enrollee in time period of query.
 --!!! I am having a hard time with negative date differences datediff. Resolved in the past with months_between, but the analog for days is not available
-select readmission_delay, count(readmission_delay)
+--!!! ABANDON QUERY BELOW -- duplicate enries are messing it up. Need to filter first. Also, anchor search to index, not readmission; it's less confusing.
+select --view count of readmissions by amount of time lapsed since index admission
+readmission_delay
+, count(readmission_delay) as frequency
 from
   (
   SELECT case
+  when days_since_last_service is null then 'no readmission in time frame'
   when days_since_last_service <0 then 'less than 0'
   when days_since_last_service <8 then '0-7'
   when days_since_last_service <15 then '8-14'
@@ -975,51 +979,78 @@ from
   when days_since_last_service <31 then '22-30'
   else 'more than 30'
   end as readmission_delay
+  , readmit_date
+  , enddate_of_last_service
+  , days_since_last_service
   FROM
     (
-    SELECT 
-    A.row#, A.member_id, A.admit_date, A.discharge_date, A.HOSPITAL_SERVICE_ID, 
-    B.discharge_date AS "enddate_of_last_service", 
-    CASE
-      when A.member_id = B.member_id THEN (trunc(A.ADMIT_DATE) - trunc(B.discharge_date)) --WHEN A.member_id = B.member_id THEN TRUNC(A.admit_date) - TRUNC(B.discharge_date) --DATEDIFF(d, B.startdate, A. enddate) ----TRUNC(DAYS_BETWEEN(A.ADMIT_DATE, B.DISCHARGE_DATE)) --
-      ELSE NULL
-    END AS days_since_last_service
-    FROM 
-    (
-      -- Create a temporary table of enrollid's inpatient services with start and end dates & total paid.
-      SELECT 
-      ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#
-      , HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id
-      FROM 
-      (
-        select distinct HOSPITAL_SERVICE_ID, visit_guid, member_id, admit_date, discharge_date, ds_visit_type_id
-        from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
-      )
-      WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) = '2017'
-    ) A 
-    INNER JOIN 
-    (
-      -- Create a temporary table of enrollid's inpatient services with start and end dates & total paid.
-      SELECT 
-      ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#
-      , HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id
-      FROM 
-      (
-        select distinct HOSPITAL_SERVICE_ID, visit_guid, member_id, admit_date, discharge_date, ds_visit_type_id
-        from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
-      )
-      WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) = '2017'
-      )B 
-    ON B.row# = A.row# - 1
-    --ORDER BY A.row# ASC
-    )
-  GROUP BY DAYS_SINCE_LAST_SERVICE
-  ORDER BY DAYS_SINCE_LAST_SERVICE
+    
+    
+          --BEGINING OF SUBQUERY "FLAG QUERY"
+          SELECT --create a new table with rows tha capture index admissions in yr=2017 and the next admission for that patient in yr= 2017 or 2018
+          A.row#
+          , case 
+            when A.member_id = B.member_id then A.member_id 
+            else null
+            end as readmit_memberid
+          , case 
+            when A.member_id = B.member_id then A.admit_date 
+            else null
+            end as readmit_date
+          , case --
+            when A.member_id = B.member_id then A.discharge_date 
+            else null
+            end as readmit_discharge_date
+          , case 
+            when A.member_id = B.member_id then A.HOSPITAL_SERVICE_ID 
+            else null
+            end as readmit_facility
+          , case 
+            when A.member_id = B.member_id then A.visit_guid 
+            else null
+            end as readmit_visitID --
+          , B.discharge_date AS indexadmit_discharge_date
+          , B.member_id as indexadmit_memberid
+          ,CASE
+            when A.member_id = B.member_id THEN (trunc(A.ADMIT_DATE) - trunc(B.discharge_date)) 
+            ELSE NULL
+          END AS days_since_last_service
+          FROM 
+          (
+                  SELECT --add row number to basic table
+                  ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#
+                  , HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id, visit_guid
+                  FROM 
+                  ( --get a basic table of admissions data where A. table is the readmission stay
+                          select distinct HOSPITAL_SERVICE_ID, visit_guid, member_id, admit_date, discharge_date, ds_visit_type_id
+                          from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+                          WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) in ('2017', '2018')
+                  )
+            ) A 
+            INNER JOIN 
+            (
+                  SELECT --add row number to basic table
+                  ROW_NUMBER() OVER(ORDER BY member_id, admit_date ASC) AS row#
+                  , HOSPITAL_SERVICE_ID, admit_date, discharge_date, member_id, visit_guid
+                  FROM 
+                  ( -- get a basic table of admissions data where B. table is the index admission
+                          select distinct HOSPITAL_SERVICE_ID, visit_guid, member_id, admit_date, discharge_date, ds_visit_type_id
+                          from ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+                          WHERE ds_visit_type_id = 70 AND EXTRACT(YEAR FROM ADMIT_DATE) in ('2017', '2018')
+                  )
+            ) B 
+            ON B.row# = A.row# - 1
+            --end of subquery "FLAG_QUERY"
+            
+            
+            
+        )
+        --GROUP BY DAYS_SINCE_LAST_SERVICE
+        ORDER BY DAYS_SINCE_LAST_SERVICE
   )
 group by readmission_delay
 order by readmission_delay
 ;
-
 
 /*
 What about time? USE TRUNC?? still leaves 105 <0 and no null
