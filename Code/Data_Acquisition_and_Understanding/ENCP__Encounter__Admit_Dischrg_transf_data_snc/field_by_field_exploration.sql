@@ -1065,18 +1065,3 @@ order by (trunc(aDMIT_DATE) - trunc(discharge_date)) asc
 
 
 
-
-
-/*
--- diagnoses
--- day and time of day admitted
--- day and time of day discharged
--- transfers as source or endpoint
--- can I detect the presence of a <24 hour discharge taht would be invisible in billing records?
--- link to demographic data for the member
--- type of facility
--- type of facility/situation from which the patient was admitted
--- type of facility/situation to which the patient was discharged/transfered
--- language (60% populated)
-
-*/
