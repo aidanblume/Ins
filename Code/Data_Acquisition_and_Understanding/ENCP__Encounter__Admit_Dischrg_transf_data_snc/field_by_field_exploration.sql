@@ -1,3 +1,8 @@
+SELECT DISTINCT DIAG_CODE
+from encounter.admit_dischrg_transf_data_snc
+;
+
+
 /*
 From Oracle SQL: ENCP database, ENCOUNTER schema, ADMIT_DISCHRG_TRANSF_DATA_SNC table
 
