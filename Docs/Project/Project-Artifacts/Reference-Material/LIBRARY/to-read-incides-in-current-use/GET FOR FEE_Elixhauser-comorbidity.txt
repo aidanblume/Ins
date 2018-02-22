@@ -1,3 +1,11 @@
+Med Care. 1998 Jan;36(1):8-27.
+Comorbidity measures for use with administrative data.
+Elixhauser A1, Steiner C, Harris DR, Coffey RM.
+
+
+ALSO
+
+
 Med Care. 2009 Jun;47(6):626-33. doi: 10.1097/MLR.0b013e31819432e5.
 A modification of the Elixhauser comorbidity measures into a point system for hospital death using administrative data.
 van Walraven C1, Austin PC, Jennings A, Quan H, Forster AJ.
