@@ -6,19 +6,18 @@ For each data, an individual report describing the data schema, the meaning of e
 
 For each dataset, the links to the sample datasets in the _**Data**_ directory are also provided. 
 
-_**For ease of modifying this report, placeholder links are included in this page, for example a link to dataset 1, but they are just placeholders pointing to a non-existent page. These should be modified to point to the actual location.**_
-
 
 ## Raw Data Sources
 
 
 | Dataset Name | Original Location   | Destination Location  | Data Movement Tools / Scripts | Link to Report |
-| ---:| ---: | ---: | ---: | -----: |
-| Dataset 1 | Brief description of its orignal location | Brief description of its destination location | [script1.py](link/to/python/script/file/in/Code) | [Raw Dataset 1 Report](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Data_Report/RawDataSet1SummaryReport.md)|
-| Dataset 2 | Brief description of its orignal location | Brief description of its destination location | [script2.R](link/to/R/script/file/in/Code) | [Raw Dataset 2 Report](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Data_Report/RawDataSet2SummaryReport.md)|
+| awe_2017_20180223| \\plano\EDSA_Data-Science\nathalie_blume| Kept in Plano for best PHI governance | NA | H:\HS\_PROJECTS\Readmissions\Docs\Data_Report\RawDataSet1SummaryReport |
+| Dataset NUM | Brief description of its orignal location | Brief description of its destination location | [scriptNUM.py](link/to/python/script/file/in/Code) | [Raw Dataset NUM Report](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Data_Report/RawDataSetNUMSummaryReport.md)|
+| Dataset 2 | Brief description of its orignal location | Brief description of its destination location | [script2.R](link/
+to/R/script/file/in/Code) | [Raw Dataset 2 Report](https://dsghe.lacare.org/bshelton/DataScience-ProjectTemplate/blob/master/Docs/Data_Report/RawDataSet2SummaryReport.md)|
 
 
-* Dataset1 summary. <Provide brief summary of the data, such as how to access the data. More detailed information should be in the Dataset1 Report.>
+* Dataset1 summary. Risk Adjustment's AWE forms from mobile visits. Located on Plano. 
 * Dataset2 summary. <Provide brief summary of the data, such as how to access the data. More detailed information should be in the Dataset2 Report.> 
 
 ## Processed Data
