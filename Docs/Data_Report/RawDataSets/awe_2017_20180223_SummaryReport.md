@@ -30,7 +30,6 @@ Thank you for a valuable meeting earlier today.
 Could you send me the following when you have a chance: (1) The blank well-visit form used by adjuncts (2) the list of names/unique identifiers for the ~750 members who received well-visits last year and (3) the list of ~5100 members who will be offered well-visits this year, (4) the location of the data that result from well-visits (or a referral to someone who might be able to point me to that location). 
 
 Brandon’s and my plan is to dig into the well-visit data at the same time that I am building models of all-cause readmission risk + cost across the full L.A. Care membership.  Then I’ll come back with concrete ideas (or maybe further questions) that’ll move us toward mining the well-visit data on behalf of the PPGs. 
----
 
 ## Data quality summary
 
