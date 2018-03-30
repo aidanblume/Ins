@@ -1,16 +1,21 @@
 # Data Report
-This file will be generated for each data file received or processed. This report is where to keep the data summary, statistics, and charts that you want to use to tell the data story into the report. You only need to click a few buttons, and the report will be generated for you. 
 
 ## General summary of the data
+County of Los Angeles zip codes and related data obtained from [http://publichealth.lacounty.gov/dhsp/docs/ClusterAreasbyZipCode-SPA12-15.pdf](http://publichealth.lacounty.gov/dhsp/docs/ClusterAreasbyZipCode-SPA12-15.pdf).
 
 ## Data quality summary
 
 ## Target variable
+Readmission (not in this file)
 
 ## Individual variables
+zip_code	
+area_name	
+SPA	
+supervisiorial_districts
 
 ## Variable ranking
 
 ## Relationship between explanatory variables and target variable
-
+Use if you require a geographic analysis by area name, County Service Planning Area (SPA) or supervisiorial district.  
 
