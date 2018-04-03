@@ -234,6 +234,73 @@ ORDER BY ADMIT_DATE DESC
 --AND TRUNC(ADMIT_DATE) BETWEEN DATE '31-JAN-2018' AND DATE '1-JAN-2018' 
 --AND TRUNC(ADMIT_DATE) BETWEEN DATE '1-JAN-2018' AND DATE '2-JAN-2018' 
 
+
+/************************************************************
+*************************************************************/
+SELECT COUNT(*)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' --a Sunday
+;
+--run APR 2 at 11:24 a.m.: 128
+--run APR 3 at 10:30 a.m.: 266
+--run APR 4 at 11:24 a.m.: 
+-- touch date / 
+SELECT count(distinct member_id)
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+;
+--run APR 2 at 11:24 a.m.: 124
+--run APR 3 at 10:30 a.m.: 153
+--run APR 4 at 11:24 a.m.: 
+
+SELECT *
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE rownum < 10 
+;
+
+--specific member ID that appeared on April 3rd for April 1 admit
+SELECT distinct member_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+and TRUNC(file_load_date) = '3-APR-2018'
+WHERE 
+  NOT EXISTS (
+    SELECT distinct member_id
+    FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+    WHERE ds_visit_type_id = 70 --INPATIENT
+    AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+    and TRUNC(file_load_date) = '2-APR-2018'
+)
+;
+/************************************************************
+*************************************************************/
+
+
+DISCHARGE_DISPO_ID:  The codes from the data dictionary don’t match the codes pulled with the following query:
+SELECT distinct DISCHARGE_DISPO_ID
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+where DISCHARGE_DISPO_ID is not null
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 --Daily admissions increase over time. Retrospective data entry? Some facilities add data later than others? Ask Tony Truong. 
 --> see CREATED date field to figure this out
 --30 dates for today 
