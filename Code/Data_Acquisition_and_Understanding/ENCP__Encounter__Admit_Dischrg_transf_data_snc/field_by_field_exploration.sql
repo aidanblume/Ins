@@ -244,7 +244,7 @@ AND TRUNC(ADMIT_DATE)='1-APR-2018' --a Sunday
 ;
 --run APR 2 at 11:24 a.m.: 128
 --run APR 3 at 10:30 a.m.: 266
---run APR 4 at 11:24 a.m.: 
+--run APR 4 at 11:19 a.m.: 384
 -- touch date / 
 SELECT count(distinct member_id)
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
@@ -253,30 +253,46 @@ AND TRUNC(ADMIT_DATE)='1-APR-2018'
 ;
 --run APR 2 at 11:24 a.m.: 124
 --run APR 3 at 10:30 a.m.: 153
---run APR 4 at 11:24 a.m.: 
-
-SELECT *
-FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
-WHERE rownum < 10 
-;
+--run APR 4 at 11:24 a.m.: 157
+--run APR 11 (11 days later): 159
 
 --specific member ID that appeared on April 3rd for April 1 admit
-SELECT distinct member_id
+(SELECT distinct member_id
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 WHERE ds_visit_type_id = 70 --INPATIENT
 AND TRUNC(ADMIT_DATE)='1-APR-2018' 
-and TRUNC(file_load_date) = '3-APR-2018'
-WHERE 
-  NOT EXISTS (
-    SELECT distinct member_id
-    FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
-    WHERE ds_visit_type_id = 70 --INPATIENT
-    AND TRUNC(ADMIT_DATE)='1-APR-2018' 
-    and TRUNC(file_load_date) = '2-APR-2018'
+and TRUNC(file_load_date) = '3-APR-2018')
+MINUS
+(SELECT distinct member_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+and TRUNC(file_load_date) = '2-APR-2018'
 )
 ;
 /************************************************************
 *************************************************************/
+
+/************************************************************
+*************************************************************/
+--specific member ID that appeared on April 3rd for April 1 admit
+(SELECT distinct member_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+and TRUNC(file_load_date) = '4-APR-2018')
+MINUS
+(SELECT distinct member_id
+FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
+WHERE ds_visit_type_id = 70 --INPATIENT
+AND TRUNC(ADMIT_DATE)='1-APR-2018' 
+and 
+(TRUNC(file_load_date) <= '3-APR-2018')
+)
+;
+/************************************************************
+*************************************************************/
+
 
 
 DISCHARGE_DISPO_ID:  The codes from the data dictionary don’t match the codes pulled with the following query:
@@ -284,14 +300,6 @@ SELECT distinct DISCHARGE_DISPO_ID
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 where DISCHARGE_DISPO_ID is not null
 ;
-
-
-
-
-
-
-
-
 
 
 
@@ -395,6 +403,7 @@ WHERE ds_visit_type_id = 70 --INPATIENT
 GROUP BY HOSPITAL_SERVICE_ID
 ORDER BY COUNT(DISTINCT VISIT_GUID) ASC
 ;
+select count(*) FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC where HOSPITAL_SERVICE_ID is null;
 --How many unique hospitals are active?
 SELECT COUNT(DISTINCT HOSPITAL_SERVICE_ID)
 FROM
@@ -441,6 +450,7 @@ FROM
 WHERE ACTIVITY >=100
 ;
 --31, by contrast to the 34 for similar query using HOSPITAL_SERVICE_ID
+select count(*) FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC where SERVICING_FACILITY_ID is null; --0
 
 --LOCATION_POINT_OF_CARE
 --DIctionary says "Location details from facility (PV1.3.1)." 
