@@ -1,0 +1,149 @@
+/***
+create view UNIQUE_CASES as
+select 
+    case_id, adm_dt, dis_dt, UNIQUE_CASES.cin_no, member_no
+    , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+    , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+    , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+    , severity, aprdrg, dis_status, provider, source_table
+    , cur_pcp, cur_site_no, product_code, segment, yearmth
+    , row_number() over (order by member_no asc, adm_dt asc, dis_dt asc) as rownumber
+from
+(--select unique tupple (member_no, admi_dt, dis_dt) tupple with priority QNXT>CLM>ENC
+    select *
+    from
+    ( --add number rows inside partitions where each partition is a unique (member_no, admi_dt, dis_dt) tupple
+        select case_id, adm_dt, dis_dt, cin_no, member_no
+        , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+        , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+        , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+        , severity, aprdrg, dis_status, provider, source_table
+        , row_number() over(partition by member_no, adm_dt, dis_dt order by source_table asc, case_id desc) as rownumber
+        from
+        ( -- union of cases across 3 data tables: qnxt, clm, enc
+            select case_id, adm_dt, dis_dt, cin_no, member_no
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+            , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+            , severity, aprdrg, dis_status, provider
+            , 1 as source_table
+            from `hoap`.`tmp_QNXT_CASE_INPSNF`
+            union
+            select case_id, adm_dt, dis_dt, cin_no, member_no
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+            , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+            , severity, aprdrg, dis_status, provider
+            , 2 as source_table
+            from `hoap`.`tmp_clm_case_inpsnf`
+            union
+            select case_id, adm_dt, dis_dt, cin_no, member_no
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+            , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+            , severity, aprdrg, dis_status, provider
+            , 3 as source_table
+            from `hoap`.`tmp_ENC_CASE_INPSNF`
+        ) AS ALL_CASES
+        order by member_no, adm_dt, dis_dt
+    ) ALL_CASES_PARTITIONED
+    where rownumber =  1
+) as UNIQUE_CASES  
+left join
+( -- member information from MEMMO table
+    select cin_no, cur_pcp, cur_site_no, product_code, segment, yearmth
+    from 
+    ( -- rank identical cin_no by recncy in order to unique rows by cin_no
+        select cin_no, pcp as cur_pcp, site_no as cur_site_no, product_code, segment, yearmth
+        , row_number() over(partition by cin_no order by yearmth desc) as rownumber
+        from `HOAP`.`tmp_memmo`
+    ) as M
+    where rownumber = 1
+) as MEMMO
+on UNIQUE_CASES.cin_no = MEMMO.cin_no
+;
+
+*/
+
+/*
+find contiguous stays
+*/
+
+select stay_interval, count(stay_interval)
+from 
+(
+
+
+    select 
+        case_id
+        , adm_dt
+        ,   case
+                when stay_interval < 2 then ss_dis_dt
+                else fs_dis_dt
+            end as dis_dt
+        , cin_no
+        , member_no
+        , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
+        , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20 
+        , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+        , severity
+        , aprdrg
+        , dis_status
+        , provider
+        , cur_pcp
+        , cur_site_no
+        , product_code
+        , segment
+        , yearmth
+        , case
+            when stay_interval < 2 then ss_source_table  
+            else fs_source_table
+        end as source_table
+        , stay_interval
+    from
+    ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
+        select --select with priority QNXT > CLM > ENC and join with MEMMO data
+            FS.case_id, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.cin_no, FS.member_no
+            , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+            , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20 
+            , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+            , FS.severity, FS.aprdrg, FS.dis_status, FS.provider
+            , FS.cur_pcp, FS.cur_site_no, FS.product_code, FS.segment, FS.yearmth
+            --, RIGHT('00' + CONVERT(VARCHAR, FS.source_table), 2) as fs_source_table
+            , cast(FS.source_table as varchar(1)) as fs_source_table
+            , SS.dis_dt as ss_dis_dt
+            , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
+            , case
+                when FS.member_no = SS.member_no 
+                    then datediff(cast(FS.dis_dt as timestamp), (cast(SS.adm_dt as timestamp))) -- defaults to days in cloudera ; datediff(day, FS.dis_dt, SS.adm_dt)--WHEN LEELA RECASTS: then datediff(FS.dis_dt, SS.adm_dt) -- defaults to days in cloudera ; datediff(day, FS.dis_dt, SS.adm_dt)
+                    else null
+                end as stay_interval
+        from
+        UNIQUE_CASES as FS
+        --order by UNIQUE_CASES.rownumber
+        inner join
+        UNIQUE_CASES as SS
+        --order by UNIQUE_CASES.rownumber
+        ON SS.rownumber = FS.rownumber + 1
+    ) AS INTERVAL_ADDED
+
+
+
+
+) AS TMP
+group by stay_interval
+;
+
+
+/*
+drop view UNIQUE_CASES;
+*/
+
+
+
+--stay_interval is all null; find out why
+--loop search for contiguous stay until you end up with a final set of complete stays
+--bring in paid_amt total for each stay
+--compute labeled outcome: readmit in 30 d, or no readmit
+--tabulate read rate and read cost by subpopulation
+

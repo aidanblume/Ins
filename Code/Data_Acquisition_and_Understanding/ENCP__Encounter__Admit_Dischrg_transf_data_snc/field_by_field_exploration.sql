@@ -6,7 +6,7 @@ from encounter.admit_dischrg_transf_data_snc
 /*
 From Oracle SQL: ENCP database, ENCOUNTER schema, ADMIT_DISCHRG_TRANSF_DATA_SNC table
 
-DESCRIPTION: Exploration of the eConnect/ADT database for the purpose of predicting readmission
+DESCRIPTION: Exploration of the eConnect/ADT database for the purpose of predicting readmission 
 
 AU: Nathalie Blume
 PROJECT: Readmission Rate Reduction
@@ -951,7 +951,7 @@ SELECT count(*)
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 where attending_aa is null
 ; --785,261
---
+--1320684
 SELECT count(*)
 FROM ENCOUNTER.ADMIT_DISCHRG_TRANSF_DATA_SNC
 where attending_id is null
