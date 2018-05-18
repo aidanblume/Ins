@@ -79,7 +79,7 @@ admissions %>% select(source_facility_id, location_facility)
 # use `distinct()`:
 
 admissions %>% distinct(member_id)
-admissions %>% distinct(member_id, source_facility)
+admissions %>% distinct(member_id, first_name)
 
 
 # You can also use `sdf_nrow()`, `sdf_ncol()`, or 
@@ -112,10 +112,6 @@ admissions %>% mutate(
 # Note that the `birth_date` column still appears in the
 # printed R `tbl_spark` to be a string column, but 
 # internally Spark now recognizes it as a date column.
-
-admissions %>% mutate(
-  sex = ifelse(is.na(sex), "other/unknown", sex)
-)
 
 admissions <- admissions %>% mutate(
   los = datediff(discharge_date, admit_date)
