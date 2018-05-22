@@ -2,8 +2,6 @@ The Rothman brothers built a morbidity index after the preventable death of thei
 
 I have the relevant peer-reviewed literature by the Rothmans as well as by independent researchers at centers where the Rothman Indexwas implemented. There’s info there that I am already using to develop an LA Care model. 
 
-This work may help us develop good faith with Care Management, staffed by nurses, since it recognizes the value of nursing notes. 
-
 Peer-reviewed work:
 Bradley_etal_2013_Rothman-index
 Rothman_Rothman_Beals_2013-Rothman-Index
