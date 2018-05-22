@@ -47,22 +47,12 @@ library(gbm)
 library(neuropsychology)
 library(rtf)
 
-  
 #increate max print to 100
 options(max.print=100)
 
 
-# TK Report
-HTMLStart(outdir="/home/cdsw",file=paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S")),extension="html",echo=F,HTML=T)
-HTML.title("Readmission Modeling Report",HR=1)
-  
 
-  
 #DATA IMPORT
-  
-  
-  
-# WORK OFF OF YARN
   
 #set up spark connection
 sc_config <- spark_config()
@@ -71,7 +61,7 @@ sc <- spark_connect(master = "yarn", config = sc_config)
 #sc <- spark_connect(master = "local", config = sc_config)
 
 # Import the **njb_analytic_set** table as a Spark Data Frame
-# Make sure column 1 is key - used row_number() in SQL but dropped before export results # njb return to this for understanding/action
+# Make sure column 1 is key - used row_number() in SQL but dropped before export results # njb return to this for action
   #njb: using dplyer mutate()
 sc_model <- spark_read_parquet(sc, name="njb_analytic_set_lace",
         path="hdfs://nameservice1/user/hive/warehouse/nathalie/njb_analytic_set_lace",
@@ -81,14 +71,6 @@ sc_model <- spark_read_parquet(sc, name="njb_analytic_set_lace",
 #  mutate(severity = unlist(lapply(severity, function(e) rawToChar(e))))
 #  mutate(aprdrg = unlist(lapply(aprdrg, function(e) rawToChar(e))))
 model_raw<-collect(sc_model)
-
-# General notes on this file:
-#"sc" stands for spark connect
-# don't change lines 33 to 40: these are parameters for setting up a connection. 
-#to achieve lazy loading of the data set, on ln 44 (spark_read_parquet()), 
-#set memory = F. If memory = T, then loading will be slower. 
-#With memory = T, only header is loaded at first; data are loaded as needed.
-#in noting the source, drop '.db' from 'nathalie.db'
 
 # Fix fields imported as list of raw values from spark_read_parquet
 var_to_fix <- which(sapply(model_raw,is.list))
@@ -102,6 +84,27 @@ for (j in var_to_fix) {
   
 # Remove CCI
 model<-model_raw[which(model_raw$cci != 1),]
+
+#########################################################################
+# Alternative to Spark import - Import file locally via CSV
+# 2017 all data
+#model <- read.csv(file="query-impala-25596.csv", header=T, sep=",")
+# 2017 exclude CCI
+#model <- read.csv(file="query-hive-27290.csv", header=T, sep=",")
+#########################################################################
+
+
+
+#DESCRIPTIVE STATISTICS
+  
+  #tk njb emailed Leslie to get better info on: diabeteswithendorgandamage vs diabeteswithoutcomplications: why 0 cases for former? Am I using the codes correctly?
+  #AIDS: 0 cases. Leslie Seltzer confirms that AIDS is no longer used as a diagnostic category. 
+  #Instead the specific ailment (to which HIV may have made the member more vulnerable) is listed in the code. 
+  #Note that this weakens the predictive power of LACE compared to its original implementation. 
+  #Our trained models also do not benefit from AIDS coding.  
+  
+  #exclude outliers where los is too long; num ER visits; 
+
   
 # Descriptive on model data
 paste('Model data has',dim(model)[1],'rows and',dim(model)[2], 'columns.',sep=' ')
@@ -162,6 +165,7 @@ sumstat <- data.frame(colnm = integer(),
                       p99   = double(),
                       max   = double(),
                       stringsAsFactors = F)
+  
 for (i in 2:dim(model)[2]) {
   if (class(model[[i]])=="numeric" || class(model[[i]])=="integer") {
   sumstat[i-1,1]  <- i
@@ -184,6 +188,7 @@ for (i in 2:dim(model)[2]) {
 }
 
 # Export descriptive statistics to hive table
+  #TK njb does not appear to result in a table in hue
 sdf_copy_to(sc,sumstat,overwrite=TRUE)
 DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_sumstat")
 DBI::dbGetQuery(sc,"create table nathalie.readm_eda_sumstat as select * from sumstat")
@@ -209,20 +214,17 @@ DBI::dbGetQuery(sc,"create table nathalie.readm_eda_nzvar as select * from nzvar
 # Scale final modeling variables for modeling
 #final<-scale(model[,!colnames(model) %in% exclude],center=T,scale=T)
 
-#END OF YARN DATA BLOCKS
 
-#########################################################################
-# Alternative to Spark import - Import file locally via CSV
-# 2017 all data
-#model <- read.csv(file="query-impala-25596.csv", header=T, sep=",")
-# 2017 exclude CCI
-#model <- read.csv(file="query-hive-27290.csv", header=T, sep=",")
-#########################################################################
+  
+  
 
 #DATA INVARIANT TRANSFORMATIONS
+  
+  #tk njb make sure that final performance on LACE is only computed o the "leave out" test sample. 
+  
 
 # Baseline Model - LACE
-# Since LACE is a score outside of the modeling process, it can be score here first
+# Since LACE is a score outside of the modeling process, it can be scored here first
 # LACE score: Feature engineering that is informed by the literature and not by peeking at the data
 # Note: Adding 1 to LOS to align with LACE definition
 model$los_lace <- model$los + 1
@@ -251,6 +253,8 @@ model <- na.omit(model)
 
 # LACE score summary
 model %>% count(score_lace)
+  
+# tk njb insert graph 
 
 # Create new Y as factor
 model$V_Target <- factor(model$is_followed_by_a_30d_readmit)
@@ -258,26 +262,32 @@ model$V_Target <- factor(model$is_followed_by_a_30d_readmit)
 # SPLIT DATA SET & LEAVE ASIDE TEST SET
   
 # Random sampling, partition data into training (70%), remaining for validation (30%)
-set.seed(1234)
+set.seed(1234) #tk njb remove seed
 inTrain <- createDataPartition(y=model$is_followed_by_a_30d_readmit, p=0.7, list=F)
-dtrain <- model[inTrain,]
-dvalid <- model[-inTrain,]
+dtrain_orig <- model[inTrain,]
+dvalid_orig <- model[-inTrain,]
+
+# Upsample to correct perceived class imbalance, AFTER training split
+# Minority class is randomly sampled with replacement
+dtrain <- upSample(dtrain_orig,dtrain_orig$V_Target)
+dvalid <- upSample(dvalid_orig,dvalid_orig$V_Target)
 
 # All samples
 model %>% count(is_followed_by_a_30d_readmit)
 # Training sample (70%)
+dtrain_orig %>% count(is_followed_by_a_30d_readmit)
 dtrain %>% count(is_followed_by_a_30d_readmit)
 # Validation sample (30%)
+dvalid_orig %>% count(is_followed_by_a_30d_readmit)
 dvalid %>% count(is_followed_by_a_30d_readmit)
 
 # Plot target variable
 # All samples
 plot(factor(model$is_followed_by_a_30d_readmit))
-# Training sample (70%)
-plot(factor(dtrain$is_followed_by_a_30d_readmit))
-# Validation sample (30%)
-plot(factor(dvalid$is_followed_by_a_30d_readmit))
-  
+# Training sample (70%), prior to up sample
+plot(factor(dtrain_orig$is_followed_by_a_30d_readmit))
+# Validation sample (30%), prior to up sample
+plot(factor(dvalid_orig$is_followed_by_a_30d_readmit))
 
 # Not needed for now
 # Convert all numeric predictors to factor (categorical) for classification models
@@ -303,12 +313,20 @@ plot(factor(dvalid$is_followed_by_a_30d_readmit))
 # TK to do after the training transformation processed has been canned and can be applied here. 
 # Apply to the test data the data transformation process that was determined with the training set
 
+  
+  
+  
 # Hard coded cost_fn_fp_ratio=10 due to it being in function
 # In the future will need to have it refer to cost_fn_fp_ratio directly
 
-# Get cost for false positive and false negative
+# Assume cost for false positive and false negative
+# This factor may be generated from actual cost (cost of care given) incurred from false positive,
+# comparing with opportunity cost (in-patient hospitalization cost) of false negative
 cost_fn_fp_ratio <- 10
 
+  
+  #tk check that the random forest you use is from caret and not from e1071
+  
 costSum <- function(data, lev = NULL, model = NULL) {
   require("e1071")
   out <- (unlist(e1071::classAgreement(table(data$obs, data$pred))) [c("diag","kappa")])
@@ -648,7 +666,13 @@ diag_esm<-round(c(CM_ESM$overall[1:2],
                 ),4)
 names(diag_esm)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
 
-#Score validation set based on maximum prediction rule (>0)
+#######################################
+# Ensamble Model: Maximum Prediction
+# Score validation set based on maximum prediction rule (>0),
+# in which any model predicting positive will be positive
+# Due to low cost of False Positive relative to False Negative,
+# it is better to produce as many positive as possible
+#######################################
 pred_esp <- ifelse(tmp_df2$sum > 0, 1, 0)
 # Confusion Matrix
 CM_ESP <- confusionMatrix(as.factor(pred_esp),dvalid$V_Target,positive='1')
@@ -683,12 +707,17 @@ diag_esp<-round(c(CM_ESP$overall[1:2],
                 round((CM_ESP$table["0","1"]*cost_fn_fp_ratio+CM_ESP$table["1","0"]*1)/sum(CM_ESP$table),4)
                 ),4)
 names(diag_esp)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
- 
+
+#################################################
 # BASELINE MODEL PERFORMANCE (VALIDATION): LACE
 # Generate predictions based on LACE scores 
-#Use criterion = 10 (in LACE methodology, low+moderate risk vs. high risk). 
-#ALT: Assign 0, 1 values to cases by descreasing LACE-score order, where top x% get 1, otherwise get 0; 
+# Use criterion >= 10 
+# (in LACE methodology, low+moderate risk vs. high risk). 
+# ALT: Assign 0, 1 values to cases by descreasing LACE-score order, 
+# where top x% get 1, otherwise get 0; 
 #x is determined by the proportion of 1s in the trained model predictions.
+#################################################
+
 pred_lace<-(dvalid$score_lace>=10)*1
 
 #Validation data: Confusion Matrix
@@ -725,41 +754,9 @@ diag_lace<-round(c(CM_LACE$overall[1:2],
                 ),4)
 names(diag_lace)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
 
-
-# DECIDE WHO TO REFER TO CARE MANAGEMENT / UTILIZATION MANAGEMENT
-  
-#LIFT
-lift <- function(depvar, predvar, groups=10) {
-  if(is.factor(depvar)) depvar<-as.integer(as.character(depvar))
-  if(is.factor(predvar)) predvar<-as.integer(as.character(predvar))
-  dlift<-data.frame(cbind(depvar,predvar))
-  dlift[,"bucket"]=ntile(-dlift[,"predvar"],groups)
-  gaintable=dlift %>% group_by(bucket) %>%
-    summarise_at(vars(depvar),funs(total=n(),totalresp=sum(.,na.rm=T))) %>%
-    mutate(Cumresp=cumsum(totalresp),
-           Gain=Cumresp/sum(totalresp)*100,
-           Cumlift=Gain/(bucket*(100/groups))
-          )
-  return(gaintable)
-}
-
-dlift_lace<-lift(dtrain$followed_by_30d_readmit,dtrain$score_lace)
-
-plot(dlift_lace,main="Lift Chart - LACE Score",
-     x=dlift_lace$bucket,y=dlift_lace$Cumlift,type="I",ylab="Cumulative Lift",xlab="Bucket")
-
-# Lift Chart
-pred_lace<-prediction(predictions=dtrain$score_lace,labels=dtrain$followed_by_30d_readmit)
-objlift_lace<-performance(pred_lace,measure="lift",x.measure="rpp")
-plot(objlift_lace,main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
-  abline(1,0,col="grey")
-
-    # Gain Table
-tbl_gains<-gains(actual=dtrain$is_followed_by_a_30d_readmit,predicted=dtrain$score_lace,groups=10)
-ggplot(tbl_gains, aes(x=tbl_gains[1]))
-  ,main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
-    
-# Print out a report contrasting the models
+#############################################
+# Print out a report comparing the models
+#############################################
 # Combine Accuracy and Kappa from all models into a single data table
 ak<-as.data.frame(rbind(c("Logistic Regression",ak_lr),
                         c("Decision Tree",ak_dt),
@@ -798,7 +795,119 @@ diag<-as.data.frame(rbind(c("Logistic Regression",diag_lr),
                           c("Baseline - LACE",diag_lace)))
 names(diag)[1]<-"Model"
 
+########################
+# Output report to DOC  
+########################
+rtffile <- RTF(paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"),".doc"),
+               font.size=10)
+addHeader(rtffile,"Readmission Modeling Report",font.size=12,TOC.level=1)
+addHeader(rtffile,paste("This report is generated on ",format(Sys.time(),format="%m/%d/%Y @ %H:%M:%S.")))
+addHeader(rtffile,"Training Sample",font.size=11)
+  increaseIndent(rtffile)
+  addParagraph(rtffile,"Accuracy and Kappa")
+  addNewLine(rtffile,n=1)
+  addTable(rtffile,ak,col.width=c(1.4,0.8,0.8,0.8))
+  addNewLine(rtffile,n=1)
+  addParagraph(rtffile,"Variable Importance")
+  addTable(rtffile,vi,col.width=c(1.8,0.8,0.8,0.8,0.8,0.8))
+  addNewLine(rtffile,n=1)
+decreaseIndent(rtffile)
+addHeader(rtffile,"Validation Sample",font.size=11)
+  increaseIndent(rtffile)
+  addParagraph(rtffile,"Confusion Matrix")
+    increaseIndent(rtffile)
+    addParagraph(rtffile,"CM (Logistic Regression)")
+    addTable(rtffile,CM_LR$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Decision Tree)")
+    addTable(rtffile,CM_DT$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Random Forest)")
+    addTable(rtffile,CM_RF$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Gradient Boost)")
+    addTable(rtffile,CM_GBM$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Neural Net)")
+    addTable(rtffile,CM_NN$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Ensamble Majority Vote)")
+    addTable(rtffile,CM_ESM$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Ensamble Maximum Prediction)")
+    addTable(rtffile,CM_ESP$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Baseline - LACE)")
+    addTable(rtffile,CM_LACE$table,col.width=c(1.0,0.8,0.8))
+    addNewLine(rtffile,n=1)
+  decreaseIndent(rtffile)
+  addPageBreak(rtffile)
+  addParagraph(rtffile,"Diagnostic Metrics")
+  addParagraph(rtffile,paste(" Note: Assumes False Negative is ",cost_fn_fp_ratio," times more costly than False Positive."))
+  decreaseIndent(rtffile)
+  addTable(rtffile,diag[,c(1,2,3,4,5,6,9,10,11)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55,0.65,0.65,0.55))
+  increaseIndent(rtffile)
+  addNewLine(rtffile,n=1)
+  addParagraph(rtffile,"AUROC and AUPRC")
+    increaseIndent(rtffile)
+    addPng.RTF(rtffile,file = "auroc_lr.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_lr.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_dt.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_dt.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_rf.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_rf.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_gbm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_gbm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_nn.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_nn.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_esm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_esm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_esp.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_esp.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auroc_lace.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "auprc_lace.png", width = 2.6, height = 2.4) 
+    addNewLine(rtffile,n=1)
+  decreaseIndent(rtffile)
+done(rtffile)
+
+##################################################################
+# DECIDE WHO TO REFER TO CARE MANAGEMENT / UTILIZATION MANAGEMENT
+# In development
+##################################################################
+
+#LIFT
+lift <- function(depvar, predvar, groups=10) {
+  if(is.factor(depvar)) depvar<-as.integer(as.character(depvar))
+  if(is.factor(predvar)) predvar<-as.integer(as.character(predvar))
+  dlift<-data.frame(cbind(depvar,predvar))
+  dlift[,"bucket"]=ntile(-dlift[,"predvar"],groups)
+  gaintable=dlift %>% group_by(bucket) %>%
+    summarise_at(vars(depvar),funs(total=n(),totalresp=sum(.,na.rm=T))) %>%
+    mutate(Cumresp=cumsum(totalresp),
+           Gain=Cumresp/sum(totalresp)*100,
+           Cumlift=Gain/(bucket*(100/groups))
+          )
+  return(gaintable)
+}
+
+dlift_lace<-lift(dtrain$followed_by_30d_readmit,dtrain$score_lace)
+
+plot(dlift_lace,main="Lift Chart - LACE Score",
+     x=dlift_lace$bucket,y=dlift_lace$Cumlift,type="I",ylab="Cumulative Lift",xlab="Bucket")
+
+# Lift Chart
+pred_lace<-prediction(predictions=dtrain$score_lace,labels=dtrain$followed_by_30d_readmit)
+objlift_lace<-performance(pred_lace,measure="lift",x.measure="rpp")
+plot(objlift_lace,main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
+  abline(1,0,col="grey")
+
+# Gain Table
+tbl_gains<-gains(actual=dtrain$is_followed_by_a_30d_readmit,predicted=dtrain$score_lace,groups=10)
+ggplot(tbl_gains, aes(x=tbl_gains[1])),main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
+
+##################################
 # Generate report in HTML
+# In development, format can be improved. 
+# Unclear if this is the right output desired.
+##################################    
+# TK Report
+HTMLStart(outdir="/home/cdsw",file=paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S")),extension="html",echo=F,HTML=T)
+HTML.title("Readmission Modeling Report",HR=1)
+  
+
 filename=paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"))
 HTMLStart(outdir="/home/cdsw",file=filename,extension="html",echo=F,HTML=T)
 
@@ -852,68 +961,3 @@ HTMLhr()
 
 HTMLStop()
 
-
-# Output report to DOC  
-rtffile <- RTF(paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"),".doc"),
-               font.size=10)
-addHeader(rtffile,"Readmission Modeling Report",font.size=12,TOC.level=1)
-addHeader(rtffile,paste("This report is generated on ",format(Sys.time(),format="%m/%d/%Y @ %H:%M:%S.")))
-addHeader(rtffile,"Training Sample",font.size=11)
-  increaseIndent(rtffile)
-  addParagraph(rtffile,"Accuracy and Kappa")
-  addNewLine(rtffile,n=1)
-  addTable(rtffile,ak,col.width=c(1.4,0.8,0.8,0.8))
-  addNewLine(rtffile,n=1)
-  addParagraph(rtffile,"Variable Importance")
-  addTable(rtffile,vi,col.width=c(1.8,0.8,0.8,0.8,0.8,0.8))
-  addNewLine(rtffile,n=1)
-decreaseIndent(rtffile)
-addHeader(rtffile,"Validation Sample",font.size=11)
-  increaseIndent(rtffile)
-  addParagraph(rtffile,"Confusion Matrix")
-    increaseIndent(rtffile)
-    addParagraph(rtffile,"CM (Logistic Regression)")
-    addTable(rtffile,CM_LR$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Decision Tree)")
-    addTable(rtffile,CM_DT$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Random Forest)")
-    addTable(rtffile,CM_RF$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Gradient Boost)")
-    addTable(rtffile,CM_GBM$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Neural Net)")
-    addTable(rtffile,CM_NN$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Ensamble Majority Vote)")
-    addTable(rtffile,CM_ESM$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Ensamble Maximum Prediction)")
-    addTable(rtffile,CM_ESP$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Baseline - LACE)")
-    addTable(rtffile,CM_LACE$table,col.width=c(1.0,0.8,0.8))
-    addNewLine(rtffile,n=1)
-  decreaseIndent(rtffile)
-  addPageBreak(rtffile)
-  addParagraph(rtffile,"Diagnostic Metrics")
-  decreaseIndent(rtffile)
-  addTable(rtffile,diag[,c(1,2,3,4,5,6,9,10,11)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55,0.65,0.65,0.55))
-  increaseIndent(rtffile)
-  addNewLine(rtffile,n=1)
-  addParagraph(rtffile,"AUROC and AUPRC")
-    increaseIndent(rtffile)
-    addPng.RTF(rtffile,file = "auroc_lr.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_lr.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_dt.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_dt.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_rf.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_rf.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_gbm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_gbm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_nn.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_nn.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_esm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_esm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_esp.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_esp.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_lace.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_lace.png", width = 2.6, height = 2.4) 
-    addNewLine(rtffile,n=1)
-  decreaseIndent(rtffile)
-done(rtffile)
