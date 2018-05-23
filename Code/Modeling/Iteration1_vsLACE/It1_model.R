@@ -1,4 +1,4 @@
-# Load required packages
+## Load required packages
 
 packages <- c("data.table",
               "stats",
@@ -52,7 +52,7 @@ options(max.print=100)
 
 
 
-#DATA IMPORT
+## DATA IMPORT
   
 #set up spark connection
 sc_config <- spark_config()
@@ -83,6 +83,9 @@ for (j in var_to_fix) {
 }
   
 # Remove CCI
+  #Members in the CCI line of business do not always submit hospitalization claims with us.
+  #Therefore their readmission rates are artificially low in our data. 
+  
 model<-model_raw[which(model_raw$cci != 1),]
 
 #########################################################################
@@ -93,48 +96,83 @@ model<-model_raw[which(model_raw$cci != 1),]
 #model <- read.csv(file="query-hive-27290.csv", header=T, sep=",")
 #########################################################################
 
+  
+
+## DATA INVARIANT TRANSFORMATIONS
+
+# Create new Y as factor
+model$V_Target <- factor(model$is_followed_by_a_30d_readmit)
+
+# Remove variables not considered for modeling, including key
+model <- model[ , -which(names(model) %in% c("cin_no", "cci", "is_followed_by_death_or_readmit"))]
 
 
-#DESCRIPTIVE STATISTICS
   
-  #tk njb emailed Leslie to get better info on: diabeteswithendorgandamage vs diabeteswithoutcomplications: why 0 cases for former? Am I using the codes correctly?
-  #AIDS: 0 cases. Leslie Seltzer confirms that AIDS is no longer used as a diagnostic category. 
-  #Instead the specific ailment (to which HIV may have made the member more vulnerable) is listed in the code. 
-  #Note that this weakens the predictive power of LACE compared to its original implementation. 
-  #Our trained models also do not benefit from AIDS coding.  
+## SPLIT DATA SET & LEAVE ASIDE TEST SET
+  # pair 1: dtrain_orig and dvalid_orig have class imbalance.
+  # pair 2: dtrain and dvalid do not have class imbalance because readmits are upsampled.
   
-  #exclude outliers where los is too long; num ER visits; 
+# Random sampling, partition data into training (70%), remaining for validation (30%)
+set.seed(1234) #(TK SEED)
+inTrain <- createDataPartition(y=model$is_followed_by_a_30d_readmit, p=0.7, list=F)
+dtrain_orig <- model[inTrain,]
+dvalid_orig <- model[-inTrain,]
+
+# Upsample to correct perceived class imbalance, AFTER training split
+# Minority class is randomly sampled with replacement
+dtrain_bal <- upSample(dtrain_orig,dtrain_orig$V_Target)
+dvalid_bal <- upSample(dvalid_orig,dvalid_orig$V_Target)
+
+# All samples
+model %>% count(is_followed_by_a_30d_readmit)
+# Training sample (70%)
+dtrain_orig %>% count(is_followed_by_a_30d_readmit)
+dtrain_bal %>% count(is_followed_by_a_30d_readmit)
+# Validation sample (30%)
+dvalid_orig %>% count(is_followed_by_a_30d_readmit)
+dvalid_bal %>% count(is_followed_by_a_30d_readmit)
+
+# Plot target variable
+# All samples
+plot(factor(model$is_followed_by_a_30d_readmit))
+# Training sample (70%), prior to up sample
+plot(factor(dtrain_orig$is_followed_by_a_30d_readmit))
+# Validation sample (30%), prior to up sample
+plot(factor(dvalid_orig$is_followed_by_a_30d_readmit))
+
+# Decide which set to use going forward (TK SWITCH):
+  #original
+#dtrain <- dtrain_orig
+#dvalid <- dvalid_orig
+  #balanced
+dtrain <- dtrain_bal
+dvalid <- dvalid_bal
+  
+# Not needed for now
+# Convert all numeric predictors to factor (categorical) for classification models
+#f_names<-c("los","acuity", "cerebrovasculardisease", "peripheralvasculardisease", 
+#           "diabeteswithoutcomplications", "congestiveheartfailure", "diabeteswithendorgandamage", 
+#           "chronicpulmonarydisease", "mildliverorrenaldisease", "anytumor", "dementia", 
+#           "connectivetissuedisease", "aids", "metastaticsolidtumor", "er_visits",
+#           "is_followed_by_a_30d_readmit","is_followed_by_death_or_readmit")
+#dtrain[,f_names]<-lapply(dtrain[,f_names],as.character)
+#dtrain$is_followed_by_a_30d_readmit<-ifelse(dtrain$is_followed_by_a_30d_readmit==1, "Y","N")
+# dtrain[sapply(dtrain,is.numeric)]<-lapply(dtrain[sapply(dtrain,is.numeric)],as.factor)
+
 
   
-# Descriptive on model data
+## DESCRIPTIVE STATISTICS and TRANSFORMATIONS ON TRAINING SET
+
+#############
+# Overview
+#############
+  
+# Descriptive on model, training and validation data
+  # Note that if Training set was upsampled, it will have more rows than Model set. 
 paste('Model data has',dim(model)[1],'rows and',dim(model)[2], 'columns.',sep=' ')
-
-# Exploratory Data Analysis - Summary statistics
-# Further expanded for all numeric and integer variables below
-t(summary(model))
-
-# Exploratory Data Analysis - Summary of Missing
-totmiss <- round(sum(is.na(model))/(nrow(model)*ncol(model))*100,digits=2)
-paste("Total % missing values: ",totmiss,"%",sep='')
-
-# Exploratory Data Analysis - Plot of Missing if any
-if (totmiss > 0) {
-plot_missing <- function(datain,title=NULL) {
-  tmp_df <- as.data.frame(ifelse(is.na(datain),0,1))
-  tmp_df <- tmp_df[,order(colSums(tmp_df))]
-  data_tmp<- expand.grid(list(x=1:nrow(tmp_df),y=colnames(tmp_df)))
-  data_tmp$m <- as.vector(as.matrix(tmp_df))
-  data_tmp <- data.frame(x=unlist(data_tmp$x), y=unlist(data_tmp$y),m=unlist(data_tmp$m))
-  ggplot(data_tmp) + 
-  geom_tile(aes(x=x,y=y,fill=factor(m))) +
-  scale_fill_manual(values=c("black","white"),name="Missing\n(0=Yes, 1=No)") +
-  theme_light() +
-  ylab("") +
-  xlab("") +
-  ggtitle(title)
-}
-plot_missing(model,title="Plot of Missing Values")
-}
+paste('Training data has',dim(dtrain)[1],'rows',sep=' ')
+paste('Validation data has',dim(dvalid)[1],'rows',sep=' ')
+print('The following descriptive statistics apply to the training data set.')
 
 # Categorical variables
 # cat_var <- names(model)[which(sapply(model,is.character))]
@@ -146,7 +184,11 @@ plot_missing(model,title="Plot of Missing Values")
 
 # Numeric variables
 # numeric_var <- names(model)[which(sapply(model,is.numeric))]
-
+  
+# Exploratory Data Analysis - Summary statistics
+# Further expanded for all numeric and integer variables below
+t(summary(dtrain))
+  
 # Exploratory Data Analysis - Descriptive Statistics
 sumstat <- data.frame(colnm = integer(),
                       varnm = character(),
@@ -166,24 +208,24 @@ sumstat <- data.frame(colnm = integer(),
                       max   = double(),
                       stringsAsFactors = F)
   
-for (i in 2:dim(model)[2]) {
-  if (class(model[[i]])=="numeric" || class(model[[i]])=="integer") {
+for (i in 2:dim(dtrain)[2]) {
+  if (class(dtrain[[i]])=="numeric" || class(dtrain[[i]])=="integer") {
   sumstat[i-1,1]  <- i
-  sumstat[i-1,2]  <- names(model)[i]
-  sumstat[i-1,3]  <- class(model[[i]])
-  sumstat[i-1,4]  <- sum(is.na(model[[i]]))
-  sumstat[i-1,5]  <- min(model[[i]],na.rm=T)
-  sumstat[i-1,6]  <- quantile(model[[i]],0.01,na.rm=T)
-  sumstat[i-1,7]  <- quantile(model[[i]],0.05,na.rm=T)
-  sumstat[i-1,8]  <- quantile(model[[i]],0.10,na.rm=T)
-  sumstat[i-1,9]  <- quantile(model[[i]],0.25,na.rm=T)
-  sumstat[i-1,10]  <- median(model[[i]],na.rm=T)
-  sumstat[i-1,11] <- mean(model[[i]],na.rm=T)
-  sumstat[i-1,12] <- quantile(model[[i]],0.75,na.rm=T)
-  sumstat[i-1,13] <- quantile(model[[i]],0.90,na.rm=T)
-  sumstat[i-1,14] <- quantile(model[[i]],0.95,na.rm=T)
-  sumstat[i-1,15] <- quantile(model[[i]],0.99,na.rm=T)
-  sumstat[i-1,16] <- max(model[[i]],na.rm=T)
+  sumstat[i-1,2]  <- names(dtrain)[i]
+  sumstat[i-1,3]  <- class(dtrain[[i]])
+  sumstat[i-1,4]  <- sum(is.na(dtrain[[i]]))
+  sumstat[i-1,5]  <- min(dtrain[[i]],na.rm=T)
+  sumstat[i-1,6]  <- quantile(dtrain[[i]],0.01,na.rm=T)
+  sumstat[i-1,7]  <- quantile(dtrain[[i]],0.05,na.rm=T)
+  sumstat[i-1,8]  <- quantile(dtrain[[i]],0.10,na.rm=T)
+  sumstat[i-1,9]  <- quantile(dtrain[[i]],0.25,na.rm=T)
+  sumstat[i-1,10]  <- median(dtrain[[i]],na.rm=T)
+  sumstat[i-1,11] <- mean(dtrain[[i]],na.rm=T)
+  sumstat[i-1,12] <- quantile(dtrain[[i]],0.75,na.rm=T)
+  sumstat[i-1,13] <- quantile(dtrain[[i]],0.90,na.rm=T)
+  sumstat[i-1,14] <- quantile(dtrain[[i]],0.95,na.rm=T)
+  sumstat[i-1,15] <- quantile(dtrain[[i]],0.99,na.rm=T)
+  sumstat[i-1,16] <- max(dtrain[[i]],na.rm=T)
   }
 }
 
@@ -193,127 +235,150 @@ sdf_copy_to(sc,sumstat,overwrite=TRUE)
 DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_sumstat")
 DBI::dbGetQuery(sc,"create table nathalie.readm_eda_sumstat as select * from sumstat")
 
-# Check near-zero of values in every variable
-nzvar <- nearZeroVar(model, saveMetrics = TRUE)
-nzvar$varn <- row(nzvar)[,1]
-nzvar$varnm <- names(model)
-# nzvar$exclude <- nzvar$zeroVar | nzvar$nzv
-nzvar$ex <- nzvar$percentUnique < 1
+###################
+# Missing values
+###################
 
-# Export near zero check results to hive table
-sdf_copy_to(sc,nzvar,overwrite=TRUE)
-DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_nzvar")
-DBI::dbGetQuery(sc,"create table nathalie.readm_eda_nzvar as select * from nzvar")
+# Exploratory Data Analysis - Summary of Missing
+totmiss <- round(sum(is.na(dtrain))/(nrow(dtrain)*ncol(dtrain))*100,digits=2)
+paste("Total % missing values: ",totmiss,"%",sep='')
 
-# Remove variables without any variance in value
-#exclude<-nzvar[nzvar$ex,"varnm"]
-# Remove variables not considered for modeling, including key
-# Not used for LACE iteration 0 and 1 since no data issue is found
-#exclude<-c(exclude,"cin_no")
+# Exploratory Data Analysis - Plot of Missing if any
+if (totmiss > 0) {
+plot_missing <- function(datain,title=NULL) {
+  tmp_df <- as.data.frame(ifelse(is.na(datain),0,1))
+  tmp_df <- tmp_df[,order(colSums(tmp_df))]
+  data_tmp<- expand.grid(list(x=1:nrow(tmp_df),y=colnames(tmp_df)))
+  data_tmp$m <- as.vector(as.matrix(tmp_df))
+  data_tmp <- data.frame(x=unlist(data_tmp$x), y=unlist(data_tmp$y),m=unlist(data_tmp$m))
+  ggplot(data_tmp) + 
+  geom_tile(aes(x=x,y=y,fill=factor(m))) +
+  scale_fill_manual(values=c("black","white"),name="Missing\n(0=Yes, 1=No)") +
+  theme_light() +
+  ylab("") +
+  xlab("") +
+  ggtitle(title)
+}
+plot_missing(dtrain,title="Plot of Missing Values")
+}
+  
+# TRANSFORMATION
+# Remove any row with missing values. 
+dtrain <- na.omit(dtrain)
 
-# Scale final modeling variables for modeling
+######################
+# Near Zero Variance
+######################
+
+  #(TK TURNED OFF) Turned off because LACE requires specific predictor set whether or not it has nzv.
+  #Training on alternative models will be unaffected. 
+  
+## Check near-zero of values in every variable
+#nzvar <- nearZeroVar(dtrain, saveMetrics = TRUE)
+#nzvar$varn <- row(nzvar)[,1]
+#nzvar$varnm <- names(dtrain)
+## nzvar$exclude <- nzvar$zeroVar | nzvar$nzv
+#nzvar$exclude <- nzvar$percentUnique < 1
+#
+## Export near zero check results to hive table
+#sdf_copy_to(sc,nzvar,overwrite=TRUE)
+#DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_nzvar")
+#DBI::dbGetQuery(sc,"create table nathalie.readm_eda_nzvar as select * from nzvar")
+#
+## TRANSFORMATION
+## Remove variables without any variance in value
+#exclude<-nzvar[nzvar$exclude,"varnm"]
+
+############
+# Outliers
+############
+
+#All variables except LOS and ER_VISITS are binary. ER_VISITS is bounded [1; 4]. Only LOS may have outliers.
+  
+los_stats <- dtrain %>%
+  summarize(
+    mean_los = mean(los),
+    stdev_los = sd(los),
+    min_los = min(los),
+    max_los = max(los),
+    #(TK IMPROVEMENT POSSIBLE) The cutoff below is meant to id extreme outliers only. 
+    #LOS varies between medical and mental hospitalizations.
+    #At next iteration, primary dx will be available and outliers should be
+    #determined by Dx and addressed with within-dx data transformations. 
+    cutoff = 20 * sd(los)
+  )
+
+# Summary table 
+frequency_distribution <- dtrain %>% 
+  group_by(los) %>% 
+  summarize(n = n()) %>% 
+  arrange(los) %>% collect()
+
+#Histogram
+ggplot(frequency_distribution, aes( x=los, y=n )) +   
+  geom_line()+
+  geom_point() +
+  geom_vline(xintercept = los_stats$cutoff, colour="red") +
+  geom_text(aes(x=los_stats$cutoff, label="\nCutoff at 20 stdev above the mean", y=5000), colour="red", angle=90, text=element_text(size=11))
+
+# TRANSFORMATION
+# Here all LOS is treated the same. 
+# The transformation is to place a ceiling on LOS and to reduce outliers to the ceiling.
+# This does not make a distinction between data entry error and truly long stays.
+# This does not make a distinction between diagnoses where LOS is expected to be greater (e.g. psychiatric hospitalizations)
+# Improvements in data quality and discrimination by Dx could therefore be made. 
+train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff, los))
+
+#############
+# Anomalies
+#############
+
+#Leslie Seltzer (subject matter expert) confirms diabetes coding. Why so few diabetes w/ end organ failure? 
+
+#Leslie confirms that AIDS is no longer used as a diagnostic category. 
+#Instead the specific ailment (to which HIV may have made the member more vulnerable) 
+#is coded. Note that changes in clinical use of codes, such as no longer using AIDS codes,
+#weaken the predictive power of LACE compared to its original implementation. Our trained 
+#models are weakened as well.
+
+#############
+# SCALE
+#############
+  
+## Scale final modeling variables for modeling
+##Not done for this iteration
 #final<-scale(model[,!colnames(model) %in% exclude],center=T,scale=T)
 
+#################################
+# Validation Set Transformation
+#################################
+
+# The value of all transformation parameters were determined with the training data set
+# (TK SWITCH) Remember to omit transformations that were omitted with the training set
+  
+dvalid <- na.omit(dvalid)
+
+#exclude<-nzvar[nzvar$exclude,"varnm"]
+
+#handle outliers where los is too long. [transformation?]
+
 
   
   
-
-#DATA INVARIANT TRANSFORMATIONS
-  
-  #tk njb make sure that final performance on LACE is only computed o the "leave out" test sample. 
   
 
-# Baseline Model - LACE
-# Since LACE is a score outside of the modeling process, it can be scored here first
-# LACE score: Feature engineering that is informed by the literature and not by peeking at the data
-# Note: Adding 1 to LOS to align with LACE definition
-model$los_lace <- model$los + 1
-model$score_a <- model$acuity * 3
-model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
-                 model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
-                 model$congestiveheartfailure * 2 + model$diabeteswithendorgandamage * 2 +
-                 model$chronicpulmonarydisease * 2 + model$mildliverorrenaldisease * 2 +
-                 model$anytumor * 2 +
-                 model$dementia * 3 + model$connectivetissuedisease * 3 +
-                 model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
-                 model$metastaticsolidtumor * 6
-model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
-model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
-                       ifelse(model$los_lace <= 6, 4, 
-                              ifelse(model$los_lace <= 13, 5, 
-                                     ifelse(model$los_lace>=14, 7, 0)
-                                    )
-                             )
-                      )
-model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
-
-#remove from data set (test + train) any row where 'los' or 'acuity' are null because the LACE score for those 
-#rows would be artificially depressed.
-model <- na.omit(model)
-
-# LACE score summary
-model %>% count(score_lace)
   
-# tk njb insert graph 
-
-# Create new Y as factor
-model$V_Target <- factor(model$is_followed_by_a_30d_readmit)
-
-# SPLIT DATA SET & LEAVE ASIDE TEST SET
   
-# Random sampling, partition data into training (70%), remaining for validation (30%)
-set.seed(1234) #tk njb remove seed
-inTrain <- createDataPartition(y=model$is_followed_by_a_30d_readmit, p=0.7, list=F)
-dtrain_orig <- model[inTrain,]
-dvalid_orig <- model[-inTrain,]
-
-# Upsample to correct perceived class imbalance, AFTER training split
-# Minority class is randomly sampled with replacement
-dtrain <- upSample(dtrain_orig,dtrain_orig$V_Target)
-dvalid <- upSample(dvalid_orig,dvalid_orig$V_Target)
-
-# All samples
-model %>% count(is_followed_by_a_30d_readmit)
-# Training sample (70%)
-dtrain_orig %>% count(is_followed_by_a_30d_readmit)
-dtrain %>% count(is_followed_by_a_30d_readmit)
-# Validation sample (30%)
-dvalid_orig %>% count(is_followed_by_a_30d_readmit)
-dvalid %>% count(is_followed_by_a_30d_readmit)
-
-# Plot target variable
-# All samples
-plot(factor(model$is_followed_by_a_30d_readmit))
-# Training sample (70%), prior to up sample
-plot(factor(dtrain_orig$is_followed_by_a_30d_readmit))
-# Validation sample (30%), prior to up sample
-plot(factor(dvalid_orig$is_followed_by_a_30d_readmit))
-
-# Not needed for now
-# Convert all numeric predictors to factor (categorical) for classification models
-#f_names<-c("los","acuity", "cerebrovasculardisease", "peripheralvasculardisease", 
-#           "diabeteswithoutcomplications", "congestiveheartfailure", "diabeteswithendorgandamage", 
-#           "chronicpulmonarydisease", "mildliverorrenaldisease", "anytumor", "dementia", 
-#           "connectivetissuedisease", "aids", "metastaticsolidtumor", "er_visits",
-#           "is_followed_by_a_30d_readmit","is_followed_by_death_or_readmit")
-#dtrain[,f_names]<-lapply(dtrain[,f_names],as.character)
-#dtrain$is_followed_by_a_30d_readmit<-ifelse(dtrain$is_followed_by_a_30d_readmit==1, "Y","N")
-# dtrain[sapply(dtrain,is.numeric)]<-lapply(dtrain[sapply(dtrain,is.numeric)],as.factor)
   
-
-#PLACEHODLER: EXPLORATORY DATA ANALYSIS
-  
-  # TK nzv etc bring down here
-  
-  # Missing value imputation here
-  
-  # Consider class imbalance  
   
 #PLACEHOLDER: TRANSFORM VALIDATION DATA
 # TK to do after the training transformation processed has been canned and can be applied here. 
 # Apply to the test data the data transformation process that was determined with the training set
 
   
+  
+  
+## TRAINING
   
   
 # Hard coded cost_fn_fp_ratio=10 due to it being in function
@@ -718,6 +783,42 @@ names(diag_esp)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1"
 #x is determined by the proportion of 1s in the trained model predictions.
 #################################################
 
+    #tk njb make sure that final performance on LACE is only computed o the "leave out" test sample. 
+  
+
+# Baseline Model - LACE
+# Since LACE is a score outside of the modeling process, it can be scored here first
+# LACE score: Feature engineering that is informed by the literature and not by peeking at the data
+# Note: Adding 1 to LOS to align with LACE definition
+model$los_lace <- model$los + 1
+model$score_a <- model$acuity * 3
+model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
+                 model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
+                 model$congestiveheartfailure * 2 + model$diabeteswithendorgandamage * 2 +
+                 model$chronicpulmonarydisease * 2 + model$mildliverorrenaldisease * 2 +
+                 model$anytumor * 2 +
+                 model$dementia * 3 + model$connectivetissuedisease * 3 +
+                 model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
+                 model$metastaticsolidtumor * 6
+model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
+model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
+                       ifelse(model$los_lace <= 6, 4, 
+                              ifelse(model$los_lace <= 13, 5, 
+                                     ifelse(model$los_lace>=14, 7, 0)
+                                    )
+                             )
+                      )
+model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
+
+# LACE score summary
+model %>% count(score_lace)
+  
+# tk njb insert graph 
+
+  
+  #########above was cut and pasted from top of file
+  
+  
 pred_lace<-(dvalid$score_lace>=10)*1
 
 #Validation data: Confusion Matrix
@@ -753,6 +854,7 @@ diag_lace<-round(c(CM_LACE$overall[1:2],
                 round((CM_LACE$table["0","1"]*cost_fn_fp_ratio+CM_LACE$table["1","0"]*1)/sum(CM_LACE$table),4)
                 ),4)
 names(diag_lace)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+
 
 #############################################
 # Print out a report comparing the models
