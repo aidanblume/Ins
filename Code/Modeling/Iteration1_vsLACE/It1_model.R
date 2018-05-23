@@ -1,4 +1,25 @@
-## Load required packages
+############################################################################################################
+############################################################################################################
+##
+##  Title:              It1_model.R
+##  Description:        Trains several models and contrasts them to the LACE index. 
+##  Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Modeling/Iteration1_vsLACE
+##  Data Source:        path="hdfs://nameservice1/user/hive/warehouse/nathalie/njb_analytic_set_lace"  
+##  Output:             tk report names here
+##  Project:            Readmission
+##  Authors:            Nathalie Blume, Qing Sun (Consultant)
+##  Last Touched:       May 23, 2018
+##
+###########################################################################################################
+###########################################################################################################
+
+  
+  
+
+
+  
+
+## LOAD REQUIRED PACKAGES
 
 packages <- c("data.table",
               "stats",
@@ -50,7 +71,11 @@ library(rtf)
 #increate max print to 100
 options(max.print=100)
 
+  
+  
 
+
+  
 
 ## DATA IMPORT
   
@@ -97,6 +122,10 @@ model<-model_raw[which(model_raw$cci != 1),]
 #########################################################################
 
   
+  
+
+
+  
 
 ## DATA INVARIANT TRANSFORMATIONS
 
@@ -106,11 +135,18 @@ model$V_Target <- factor(model$is_followed_by_a_30d_readmit)
 # Remove variables not considered for modeling, including key
 model <- model[ , -which(names(model) %in% c("cin_no", "cci", "is_followed_by_death_or_readmit"))]
 
+  
+  
+
 
   
+
 ## SPLIT DATA SET & LEAVE ASIDE TEST SET
-  # pair 1: dtrain_orig and dvalid_orig have class imbalance.
-  # pair 2: dtrain and dvalid do not have class imbalance because readmits are upsampled.
+  
+#######################################
+## pair 1: dtrain_orig and dvalid_orig have class imbalance.
+## pair 2: dtrain and dvalid do not have class imbalance because readmits are upsampled.
+#######################################
   
 # Random sampling, partition data into training (70%), remaining for validation (30%)
 set.seed(1234) #(TK SEED)
@@ -159,12 +195,16 @@ dvalid <- dvalid_bal
 #dtrain$is_followed_by_a_30d_readmit<-ifelse(dtrain$is_followed_by_a_30d_readmit==1, "Y","N")
 # dtrain[sapply(dtrain,is.numeric)]<-lapply(dtrain[sapply(dtrain,is.numeric)],as.factor)
 
+  
+  
+
 
   
+
 ## DESCRIPTIVE STATISTICS and TRANSFORMATIONS ON TRAINING SET
 
 #############
-# Overview
+## Overview
 #############
   
 # Descriptive on model, training and validation data
@@ -236,7 +276,7 @@ DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_sumstat")
 DBI::dbGetQuery(sc,"create table nathalie.readm_eda_sumstat as select * from sumstat")
 
 #############
-# Anomalies
+## Anomalies
 #############
 
 #Leslie Seltzer (subject matter expert) confirms diabetes coding is correct. 
@@ -249,7 +289,7 @@ DBI::dbGetQuery(sc,"create table nathalie.readm_eda_sumstat as select * from sum
 #models are weakened as well.
 
 ###################
-# Missing values
+## Missing values
 ###################
 
 # Exploratory Data Analysis - Summary of Missing
@@ -280,7 +320,7 @@ plot_missing(dtrain,title="Plot of Missing Values")
 dtrain <- na.omit(dtrain)
 
 ######################
-# Near Zero Variance
+## Near Zero Variance
 ######################
 
   #(TK TURNED OFF) Turned off because LACE requires specific predictor set whether or not it has nzv.
@@ -303,7 +343,7 @@ dtrain <- na.omit(dtrain)
 #exclude<-nzvar[nzvar$exclude,"varnm"]
 
 ############
-# Outliers
+## Outliers
 ############
 
 #All variables except LOS and ER_VISITS are binary. ER_VISITS is bounded [1; 4]. Only LOS may have outliers.
@@ -343,7 +383,7 @@ ggplot(frequency_distribution, aes( x=los, y=n )) +
 train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff, los))
 
 #############
-# SCALE
+## SCALE
 #############
   
 ## Scale final modeling variables for modeling
@@ -351,7 +391,7 @@ train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff
 #final<-scale(model[,!colnames(model) %in% exclude],center=T,scale=T)
 
 #################################
-# Validation Set Transformation
+## Validation Set Transformation
 #################################
 
 # The value of all transformation parameters were determined with the training data set
@@ -360,15 +400,18 @@ train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff
 dvalid <- na.omit(dvalid)
 #exclude<-nzvar[nzvar$exclude,"varnm"]
 dvalid <- dvalid %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff, los))
-  
-  
-  
-  
-# MODEL TRAINING
 
-###################################
-# AGAINST WHAT PERFORMANCE METRIC?
-###################################
+  
+  
+
+
+  
+
+## MODEL TRAINING
+
+###########################
+## STATE TRAINING METRIC
+###########################
 
 # We could set the training performance metric as Kappa (instead of Accuracy) or write a 
 # function for AUPRC. The solution below applies a cost function that renders FN 10 times
@@ -405,7 +448,7 @@ fitControl  <- trainControl(method="cv", number=5, savePrediction=T, summaryFunc
 # Cost Function approach #
   
 #######################
-# Logistic Regression
+## Logistic Regression
 #######################
   
 # No tuning parameter for glm in caret (ref: https://stackoverflow.com/questions/47822694/logistic-regression-tuning-parameter-grid-in-r-caret-package).
@@ -485,9 +528,9 @@ dev.off()
 #                ),4)
 #names(diag_lr)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
 
-#################
-# Decision Tree
-#################
+##################
+## Decision Tree
+##################
 
 dTree <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
@@ -538,9 +581,9 @@ plot(pr_dt,main="AUPRC Decision Tree")
 
 dev.off()    
 
-#################
-# Random Forest
-#################
+##################
+## Random Forest
+##################
   #tk check that the random forest you use is from caret and not from e1071
 
 rForest <- train( V_Target ~ los + acuity + cerebrovasculardisease +
@@ -593,9 +636,9 @@ plot(pr_dt,main="AUPRC Random Forest")
 
 dev.off()    
 
-#####################
-# Gradient Boosting
-#####################
+######################
+## Gradient Boosting
+######################
 
 #gbmGrid <- expand.grid(interaction.depth=c(1, 3, 5), n.trees = (0:50)*50,
 #                   shrinkage=c(0.01, 0.001),
@@ -651,9 +694,9 @@ plot(pr_dt,main="AUPRC Gradient Boost")
 
 dev.off()    
   
-##################
-# Neural Network
-##################
+###################
+## Neural Network
+###################
 
 nnetModel <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
@@ -704,9 +747,9 @@ plot(pr_nn,main="AUPRC Neural Net")
 
 dev.off()    
 
-#################################
-# Ensemble Model: Majority Vote
-#################################
+##################################
+## Ensemble Model: Majority Vote
+##################################
 
 # Create a data frame for voting
   
@@ -758,14 +801,14 @@ plot(pr_nn,main="AUPRC Ensemble Majority Vote")
 dev.off()    
 
 #######################################
-# Ensemble Model: "Black Ball Wins" Vote (was Qing's "Maximum Prediction" model)
-# Score validation setwith rule "if any model predicts "positive/will be readmitted" 
-# then ensemble predicts same.
-# Due to low cost of False Positive relative to False Negative,
-# it is better to produce as many positive as possible
+## Ensemble Model: "Black Ball Wins" Vote (was Qing's "Maximum Prediction" model)
 #######################################
 
-# "Black-ball Wins" Vote
+# Score validation set with rule: 
+# "If any model predicts positive/will be readmitted, then ensemble predicts same."
+# Due to low cost of False Positive relative to False Negative,it is better to produce as many positive as possible
+
+# Vote
   
 pred_esbbw <- ifelse(tmp_df$sum > 0, 1, 0)
   
@@ -797,8 +840,131 @@ plot(pr_nn,main="AUPRC Ensemble Black Ball Wins")
 
 dev.off()    
 
+  
+  
+
+
+  
+
+## BASELINE MODEL PERFORMANCE (VALIDATION): LACE
+
+#################################################
+# Generate predictions based on LACE scores 
+# Use criterion >= 10 
+# (in LACE methodology, low+moderate risk vs. high risk). 
+# ALT: Assign 0, 1 values to cases by descreasing LACE-score order, 
+# where top x% get 1, otherwise get 0; 
+# x is determined by the proportion of 1s in the trained model predictions.
+#################################################
+
+# Note: Adding 1 to LOS to align with LACE definition
+  
+  
+  
+  
+  
+
+#tktktktk THIS IS WHERE REVIEW STOPPED, PENDING GENERATION OF RANDOM FOREST
+  
+  
+  #########above was cut and pasted from top of file
+
+#tk njb : only use dvalid rather than model data set
+
+model$los_lace <- model$los + 1
+  
+model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
+                       ifelse(model$los_lace <= 6, 4, 
+                              ifelse(model$los_lace <= 13, 5, 
+                                     ifelse(model$los_lace>=14, 7, 0)
+                                    )
+                             )
+                      )
+
+model$score_a <- model$acuity * 3
+
+model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
+                 model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
+                 model$congestiveheartfailure * 2 + model$diabeteswithendorgandamage * 2 +
+                 model$chronicpulmonarydisease * 2 + model$mildliverorrenaldisease * 2 +
+                 model$anytumor * 2 +
+                 model$dementia * 3 + model$connectivetissuedisease * 3 +
+                 model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
+                 model$metastaticsolidtumor * 6
+
+model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
+
+model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
+
+# LACE score summary
+model %>% count(score_lace)
+  
+# tk njb insert graph 
+
+  #########above was cut and pasted from top of file
+  
+  
+  
+  
+  
+  
+  
+# Score on validation sample only
+  
+pred_lace<-(dvalid$score_lace>=10)*1
+  
+# Confusion Matrix
+  
+CM_LACE <- confusionMatrix(as.factor(pred_lace),dvalid$V_Target,positive='1') 
+ 
+# Performance metrics
+  
+# AUPRC
+  
+pr_lace <- pr.curve(scores.class0 = as.numeric(as.character(pred_lace[dvalid$V_Target=='1'])), 
+                  scores.class1 = as.numeric(as.character(pred_lace[dvalid$V_Target=='0'])), curve = T)
+ 
+# Diagnostic Metrics
+  
+diag_lace<-round(c(CM_LACE$overall[2],
+                 pr_lace$auc.integral,
+                 CM_LACE$byClass[c(3,6)],
+                round((CM_LACE$table["0","1"]*cost_fn_fp_ratio+CM_LACE$table["1","0"]*1)/sum(CM_LACE$table),4)
+                ),4)
+  
+names(diag_lace)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_lace.png")
+
+plot(pr_nn,main="AUPRC Baseline - LACE")
+
+dev.off()    
+
+  
+  
+
+
+  
+
+## FUTURE AVENUES FOR IMPROVEMENT  
+
+  
 ###################################
-# Ensemble Model: TK Improvement Opportunity
+## TUNING GRID
+###################################
+
+## See Code emailed by Brandon 5/23/2018
+
+###################################
+## CONVOLUTIONAL NEURAL NETWORK
+###################################
+
+## Brandon suggests looking into different Neural network model: convolutional vs recurrent.
+
+###################################
+## Ensemble Model: TK Improvement Opportunity
 ###################################
 
 # To improve ensembling results, try to train an ensemble model that takes predictions as input, instead of imposing 
@@ -809,93 +975,54 @@ dev.off()
 #(no: what's left to test on?). Train on half the set-aside validation set and test on the other half (yes?).
   
 #tk do I include the original predictors as well? So there's more context in which to select one model over another?
-  
-#################################################
-# BASELINE MODEL PERFORMANCE (VALIDATION): LACE
-# Generate predictions based on LACE scores 
-# Use criterion >= 10 
-# (in LACE methodology, low+moderate risk vs. high risk). 
-# ALT: Assign 0, 1 values to cases by descreasing LACE-score order, 
-# where top x% get 1, otherwise get 0; 
-#x is determined by the proportion of 1s in the trained model predictions.
-#################################################
 
-    #tk njb make sure that final performance on LACE is only computed o the "leave out" test sample. 
-  
-# Baseline Model - LACE
-# Since LACE is a score outside of the modeling process, it can be scored here first
-# LACE score: Feature engineering that is informed by the literature and not by peeking at the data
-# Note: Adding 1 to LOS to align with LACE definition
-model$los_lace <- model$los + 1
-model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
-                       ifelse(model$los_lace <= 6, 4, 
-                              ifelse(model$los_lace <= 13, 5, 
-                                     ifelse(model$los_lace>=14, 7, 0)
-                                    )
-                             )
-                      )
-model$score_a <- model$acuity * 3
-model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
-                 model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
-                 model$congestiveheartfailure * 2 + model$diabeteswithendorgandamage * 2 +
-                 model$chronicpulmonarydisease * 2 + model$mildliverorrenaldisease * 2 +
-                 model$anytumor * 2 +
-                 model$dementia * 3 + model$connectivetissuedisease * 3 +
-                 model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
-                 model$metastaticsolidtumor * 6
-model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
+##################################################################
+## DECIDE WHO TO REFER TO CARE MANAGEMENT / UTILIZATION MANAGEMENT
+## In development
+##################################################################
 
-model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
-
-# LACE score summary
-model %>% count(score_lace)
-  
-# tk njb insert graph 
+##LIFT
+#lift <- function(depvar, predvar, groups=10) {
+#  if(is.factor(depvar)) depvar<-as.integer(as.character(depvar))
+#  if(is.factor(predvar)) predvar<-as.integer(as.character(predvar))
+#  dlift<-data.frame(cbind(depvar,predvar))
+#  dlift[,"bucket"]=ntile(-dlift[,"predvar"],groups)
+#  gaintable=dlift %>% group_by(bucket) %>%
+#    summarise_at(vars(depvar),funs(total=n(),totalresp=sum(.,na.rm=T))) %>%
+#    mutate(Cumresp=cumsum(totalresp),
+#           Gain=Cumresp/sum(totalresp)*100,
+#           Cumlift=Gain/(bucket*(100/groups))
+#          )
+#  return(gaintable)
+#}
+#
+#dlift_lace<-lift(dtrain$followed_by_30d_readmit,dtrain$score_lace)
+#
+#plot(dlift_lace,main="Lift Chart - LACE Score",
+#     x=dlift_lace$bucket,y=dlift_lace$Cumlift,type="I",ylab="Cumulative Lift",xlab="Bucket")
+#
+## Lift Chart
+#pred_lace<-prediction(predictions=dtrain$score_lace,labels=dtrain$followed_by_30d_readmit)
+#objlift_lace<-performance(pred_lace,measure="lift",x.measure="rpp")
+#plot(objlift_lace,main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
+#  abline(1,0,col="grey")
+#
+## Gain Table
+#tbl_gains<-gains(actual=dtrain$is_followed_by_a_30d_readmit,predicted=dtrain$score_lace,groups=10)
+#ggplot(tbl_gains, aes(x=tbl_gains[1])),main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
 
   
-  #########above was cut and pasted from top of file
   
+
+
   
-pred_lace<-(dvalid$score_lace>=10)*1
 
-#Validation data: Confusion Matrix
-CM_LACE <- confusionMatrix(as.factor(pred_lace),dvalid$V_Target,positive='1') 
-# AUROC
-roc_lace <- roc.curve(scores.class0 = as.numeric(as.character(pred_lace[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_lace[dvalid$V_Target=='0'])), curve=T)
-# AUPRC
-pr_lace <- pr.curve(scores.class0 = as.numeric(as.character(pred_lace[dvalid$V_Target=='1'])), 
-                  scores.class1 = as.numeric(as.character(pred_lace[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_lace.png")
-plot(roc_lace,main="AUROC Baseline - LACE")
-dev.off()
-png("auprc_lace.png")
-plot(pr_lace,main="AUPRC Baseline - LACE")
-dev.off()
+## REPORT
 
-#Validation data: d-prime 
-n_hit <- CM_LACE$table[2,2]
-n_miss <- CM_LACE$table[1,2]
-n_fa <- CM_LACE$table[2,1]
-n_cr <- CM_LACE$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_lace <- tmp[1]
-
-# Diagnostic Metrics
-diag_lace<-round(c(CM_LACE$overall[1:2],
-                 pr_lace$auc.integral,
-                 CM_LACE$byClass[c(3,6,7,11)],
-                 roc_lace$auc,
-                 dprime_lace$dprime,
-                round((CM_LACE$table["0","1"]*cost_fn_fp_ratio+CM_LACE$table["1","0"]*1)/sum(CM_LACE$table),4)
-                ),4)
-names(diag_lace)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
-
-
-#############################################
-# Print out a report comparing the models
-#############################################
+##################################################################
+## Group statistics across models
+##################################################################
+    
 # Combine Accuracy and Kappa from all models into a single data table
 ak<-as.data.frame(rbind(c("Logistic Regression",ak_lr),
                         c("Decision Tree",ak_dt),
@@ -929,11 +1056,11 @@ diag<-as.data.frame(rbind(c("Logistic Regression",diag_lr),
                           c("Random Forest",diag_rf),
                           c("Gradient Boost",diag_gbm),
                           c("Neural Net",diag_nn),
-                          c("Ensamble-Majority",diag_esm),
-                          c("Ensample-MaxPred",diag_esp),
+                          c("Ensemble-Majority",diag_esm),
+                          c("Ensemble-Black Ball Wins",diag_esbbw),
                           c("Baseline - LACE",diag_lace)))
 names(diag)[1]<-"Model"
-
+  
 ########################
 # Output report to DOC  
 ########################
@@ -1001,42 +1128,7 @@ addHeader(rtffile,"Validation Sample",font.size=11)
     addNewLine(rtffile,n=1)
   decreaseIndent(rtffile)
 done(rtffile)
-
-##################################################################
-# DECIDE WHO TO REFER TO CARE MANAGEMENT / UTILIZATION MANAGEMENT
-# In development
-##################################################################
-
-#LIFT
-lift <- function(depvar, predvar, groups=10) {
-  if(is.factor(depvar)) depvar<-as.integer(as.character(depvar))
-  if(is.factor(predvar)) predvar<-as.integer(as.character(predvar))
-  dlift<-data.frame(cbind(depvar,predvar))
-  dlift[,"bucket"]=ntile(-dlift[,"predvar"],groups)
-  gaintable=dlift %>% group_by(bucket) %>%
-    summarise_at(vars(depvar),funs(total=n(),totalresp=sum(.,na.rm=T))) %>%
-    mutate(Cumresp=cumsum(totalresp),
-           Gain=Cumresp/sum(totalresp)*100,
-           Cumlift=Gain/(bucket*(100/groups))
-          )
-  return(gaintable)
-}
-
-dlift_lace<-lift(dtrain$followed_by_30d_readmit,dtrain$score_lace)
-
-plot(dlift_lace,main="Lift Chart - LACE Score",
-     x=dlift_lace$bucket,y=dlift_lace$Cumlift,type="I",ylab="Cumulative Lift",xlab="Bucket")
-
-# Lift Chart
-pred_lace<-prediction(predictions=dtrain$score_lace,labels=dtrain$followed_by_30d_readmit)
-objlift_lace<-performance(pred_lace,measure="lift",x.measure="rpp")
-plot(objlift_lace,main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
-  abline(1,0,col="grey")
-
-# Gain Table
-tbl_gains<-gains(actual=dtrain$is_followed_by_a_30d_readmit,predicted=dtrain$score_lace,groups=10)
-ggplot(tbl_gains, aes(x=tbl_gains[1])),main="Lift Chart - LACE Score",xlab="% Population",ylab="Lift",col="black")
-
+  
 ##################################
 # Generate report in HTML
 # In development, format can be improved. 
@@ -1100,3 +1192,12 @@ HTMLhr()
 
 HTMLStop()
 
+  
+  
+
+
+  
+
+# STOP THE SPARK SESSION
+
+spark_disconnect(spark)
