@@ -235,6 +235,19 @@ sdf_copy_to(sc,sumstat,overwrite=TRUE)
 DBI::dbGetQuery(sc,"drop table if exists nathalie.readm_eda_sumstat")
 DBI::dbGetQuery(sc,"create table nathalie.readm_eda_sumstat as select * from sumstat")
 
+#############
+# Anomalies
+#############
+
+#Leslie Seltzer (subject matter expert) confirms diabetes coding is correct. 
+#Why 0 cases of diabetes w/ end organ damage? 
+
+#Leslie confirms that AIDS is no longer used as a diagnostic category. 
+#Instead the specific ailment (to which HIV may have made the member more vulnerable) 
+#is coded. Note that changes in clinical use of codes, such as no longer using AIDS codes,
+#weaken the predictive power of LACE compared to its original implementation. Our trained 
+#models are weakened as well.
+
 ###################
 # Missing values
 ###################
@@ -319,7 +332,7 @@ ggplot(frequency_distribution, aes( x=los, y=n )) +
   geom_line()+
   geom_point() +
   geom_vline(xintercept = los_stats$cutoff, colour="red") +
-  geom_text(aes(x=los_stats$cutoff, label="\nCutoff at 20 stdev above the mean", y=5000), colour="red", angle=90, text=element_text(size=11))
+  geom_text(aes(x=los_stats$cutoff, label="\nCutoff at 20 stdev above the mean", y=7500), colour="red", angle=90, text=element_text(size=11))
 
 # TRANSFORMATION
 # Here all LOS is treated the same. 
@@ -328,18 +341,6 @@ ggplot(frequency_distribution, aes( x=los, y=n )) +
 # This does not make a distinction between diagnoses where LOS is expected to be greater (e.g. psychiatric hospitalizations)
 # Improvements in data quality and discrimination by Dx could therefore be made. 
 train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff, los))
-
-#############
-# Anomalies
-#############
-
-#Leslie Seltzer (subject matter expert) confirms diabetes coding. Why so few diabetes w/ end organ failure? 
-
-#Leslie confirms that AIDS is no longer used as a diagnostic category. 
-#Instead the specific ailment (to which HIV may have made the member more vulnerable) 
-#is coded. Note that changes in clinical use of codes, such as no longer using AIDS codes,
-#weaken the predictive power of LACE compared to its original implementation. Our trained 
-#models are weakened as well.
 
 #############
 # SCALE
@@ -357,41 +358,33 @@ train <- dtrain %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff
 # (TK SWITCH) Remember to omit transformations that were omitted with the training set
   
 dvalid <- na.omit(dvalid)
-
 #exclude<-nzvar[nzvar$exclude,"varnm"]
+dvalid <- dvalid %>% mutate(los = ifelse(los > los_stats$cutoff, los_stats$cutoff, los))
+  
+  
+  
+  
+# MODEL TRAINING
 
-#handle outliers where los is too long. [transformation?]
+###################################
+# AGAINST WHAT PERFORMANCE METRIC?
+###################################
 
-
+# We could set the training performance metric as Kappa (instead of Accuracy) or write a 
+# function for AUPRC. The solution below applies a cost function that renders FN 10 times
+# more costly than FP. 
   
+# Cost Function approach #
   
-  
-
-  
-  
-  
-  
-#PLACEHOLDER: TRANSFORM VALIDATION DATA
-# TK to do after the training transformation processed has been canned and can be applied here. 
-# Apply to the test data the data transformation process that was determined with the training set
-
-  
-  
-  
-## TRAINING
-  
-  
-# Hard coded cost_fn_fp_ratio=10 due to it being in function
-# In the future will need to have it refer to cost_fn_fp_ratio directly
-
 # Assume cost for false positive and false negative
 # This factor may be generated from actual cost (cost of care given) incurred from false positive,
 # comparing with opportunity cost (in-patient hospitalization cost) of false negative
+    
+# Hard coded cost_fn_fp_ratio=10 due to it being in function
+# In the future will need to have it refer to cost_fn_fp_ratio directly
+# Variable cost_fn_fp_ratio is still used in reporting performance. 
 cost_fn_fp_ratio <- 10
 
-  
-  #tk check that the random forest you use is from caret and not from e1071
-  
 costSum <- function(data, lev = NULL, model = NULL) {
   require("e1071")
   out <- (unlist(e1071::classAgreement(table(data$obs, data$pred))) [c("diag","kappa")])
@@ -405,170 +398,201 @@ costSum <- function(data, lev = NULL, model = NULL) {
 # Model run setting: 5-fold cross validation on the training sample (70%)
 #fitControl  <- trainControl(method="repeatedcv", number=5, repeats=5, savePrediction=T, summaryFunction = costSum)  
 fitControl  <- trainControl(method="cv", number=5, savePrediction=T, summaryFunction = costSum)  
-  
-  
-# MODEL TRAINING
 
+# TK other approaches, from njb code
+# Cost Function approach #
+# Cost Function approach #
+# Cost Function approach #
+  
 #######################
 # Logistic Regression
 #######################
+  
 # No tuning parameter for glm in caret (ref: https://stackoverflow.com/questions/47822694/logistic-regression-tuning-parameter-grid-in-r-caret-package).
-# TK Consider using a different approach to logistic regression for better chance to optimize model
+# TK njb apply tuning grid from Brandon, here and in other training. 
+# TK njb Consider using a different approach to logistic regression for better chance to optimize model
 
-logitReg <- train(V_Target ~ los_lace + acuity + cerebrovasculardisease +
+logitReg <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
                   diabeteswithendorgandamage + chronicpulmonarydisease + mildliverorrenaldisease +
                   anytumor + dementia + connectivetissuedisease + aids + metastaticsolidtumor + er_visits,
                   data=dtrain, method="glm", metric="CostSum", maximize=F, family=binomial, trControl=fitControl)
 
 #Accuracy and Kappa on training dataset
+# tk njb why min() below? Are we selecting the best of a series? If so why on CostSum (and why altogether)?
+  
 ak_lr<-logitReg$results
+  
 ak_lr<-round(ak_lr[ak_lr$CostSum == min(ak_lr[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
+
 #Variable Importance Table on training dataset
+
 vi_lr<-varImp(logitReg)
 
 # Score on validation sample only
+  
 pred_lr <- predict(logitReg,dvalid)
+  
 # Confusion Matrix
+  
 CM_LR <- confusionMatrix(pred_lr,dvalid$V_Target,positive='1') 
-# AUROC
-roc_lr <- roc.curve(scores.class0 = as.numeric(as.character(pred_lr[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_lr[dvalid$V_Target=='0'])), curve=T)
-# AUPRC
+  
+# Performance metrics
+  
+# AUPRC (area under the precision-recall curve)
+  
 pr_lr <- pr.curve(scores.class0 = as.numeric(as.character(pred_lr[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_lr[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_lr.png")
-plot(roc_lr,main="AUROC Logistic Regression")
-dev.off()
-png("auprc_lr.png")
+
+# Diagnostic Metrics: Kappa, AUPRC, Precision, Recall, Cost (only to show effect of training metric)
+  
+diag_lr<-round(c(CM_LR$overall[2],
+                 pr_lr$auc.integral,
+                 CM_LR$byClass[c(3,6)],
+                 round((CM_LR$table["0","1"]*cost_fn_fp_ratio+CM_LR$table["1","0"]*1)/sum(CM_LR$table),4)
+                ),4)
+  
+names(diag_lr)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_lr.png")
 plot(pr_lr,main="AUPRC Logistic Regression")
 dev.off()
-  
-#Validation data: d-prime 
-n_hit <- CM_LR$table[2,2]
-n_miss <- CM_LR$table[1,2]
-n_fa <- CM_LR$table[2,1]
-n_cr <- CM_LR$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_lr <- tmp[1]
 
-# Diagnostic Metrics
-diag_lr<-round(c(CM_LR$overall[1:2],
-                 pr_lr$auc.integral,
-                 CM_LR$byClass[c(3,6,7,11)],
-                 roc_lr$auc,
-                 dprime_lr$dprime,
-                round((CM_LR$table["0","1"]*cost_fn_fp_ratio+CM_LR$table["1","0"]*1)/sum(CM_LR$table),4)
-                ),4)
-names(diag_lr)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+## Old -- we don't need to report so many metrics
+#
+## Signal Processing: njb: we are not using this
+## AUROC
+#roc_lr <- roc.curve(scores.class0 = as.numeric(as.character(pred_lr[dvalid$V_Target=='1'])), 
+#                    scores.class1 = as.numeric(as.character(pred_lr[dvalid$V_Target=='0'])), curve=T)
+#
+##Validation data: d-prime 
+#n_hit <- CM_LR$table[2,2]
+#n_miss <- CM_LR$table[1,2]
+#n_fa <- CM_LR$table[2,1]
+#n_cr <- CM_LR$table[1,1]
+#tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
+#dprime_lr <- tmp[1]
+#
+## Diagnostic Metrics
+#diag_lr<-round(c(CM_LR$overall[1:2],
+#                 pr_lr$auc.integral,
+#                 CM_LR$byClass[c(3,6,7,11)],
+#                 roc_lr$auc,
+#                 dprime_lr$dprime,
+#                round((CM_LR$table["0","1"]*cost_fn_fp_ratio+CM_LR$table["1","0"]*1)/sum(CM_LR$table),4)
+#                ),4)
+#names(diag_lr)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
 
 #################
 # Decision Tree
 #################
 
-dTree <- train(V_Target ~ los_lace + acuity + cerebrovasculardisease +
+dTree <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
                   diabeteswithendorgandamage + chronicpulmonarydisease + mildliverorrenaldisease +
                   anytumor + dementia + connectivetissuedisease + aids + metastaticsolidtumor + er_visits,
                   data=dtrain, method="rpart", metric="CostSum", maximize=F, trControl=fitControl)  
 
-#Accuracy and Kappa on training dataset
+# Accuracy and Kappa on training dataset
+  
 ak_dt<-dTree$results
+  
 ak_dt<-round(ak_dt[ak_dt$CostSum == min(ak_dt[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
-#Variable Importance Table on training dataset
+
+# Variable Importance Table on training dataset
+  
 vi_dt<-varImp(dTree)
 
 # Score on validation sample only
+  
 pred_dt <- predict(dTree,dvalid)
+  
 # Confusion Matrix
+  
 CM_DT <- confusionMatrix(pred_dt,dvalid$V_Target,positive='1') 
-# AUROC
-roc_dt <- roc.curve(scores.class0 = as.numeric(as.character(pred_dt[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_dt[dvalid$V_Target=='0'])), curve=T)
+  
+# Performance metrics
+  
 # AUPRC
+  
 pr_dt <- pr.curve(scores.class0 = as.numeric(as.character(pred_dt[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_dt[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_dt.png")
-plot(roc_dt,main="AUROC Decision Tree")
-dev.off()
-png("auprc_dt.png")
-plot(pr_dt,main="AUPRC Decision Tree")
-dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_DT$table[2,2]
-n_miss <- CM_DT$table[1,2]
-n_fa <- CM_DT$table[2,1]
-n_cr <- CM_DT$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_dt <- tmp[1]
-
+ 
 # Diagnostic Metrics
-diag_dt<-round(c(CM_DT$overall[1:2],
+  
+diag_dt<-round(c(CM_DT$overall[2],
                  pr_dt$auc.integral,
-                 CM_DT$byClass[c(3,6,7,11)],
-                 roc_dt$auc,
-                 dprime_dt$dprime,
+                 CM_DT$byClass[c(3,6)],
                 round((CM_DT$table["0","1"]*cost_fn_fp_ratio+CM_DT$table["1","0"]*1)/sum(CM_DT$table),4)
                 ),4)
-names(diag_dt)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+
+names(diag_dt)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_dt.png")
+
+plot(pr_dt,main="AUPRC Decision Tree")
+
+dev.off()    
 
 #################
 # Random Forest
 #################
+  #tk check that the random forest you use is from caret and not from e1071
 
-rForest <- train( V_Target ~ los_lace + acuity + cerebrovasculardisease +
+rForest <- train( V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
                   diabeteswithendorgandamage + chronicpulmonarydisease + mildliverorrenaldisease +
                   anytumor + dementia + connectivetissuedisease + aids + metastaticsolidtumor + er_visits,
                  data=dtrain, method="rf", metric="CostSum", maximize=F, ntree=500, 
                  trControl=fitControl)  
 
-#Accuracy and Kappa on training dataset
+# Accuracy and Kappa on training dataset
+  
 ak_rf<-rForest$results
+  
 ak_rf<-round(ak_rf[ak_rf$CostSum == min(ak_rf[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
-#names(ak_rf)<-c("Accuracy","Kappa")
-#Variable Importance Table on training dataset
-vi_rf<-varImp(rForest)
 
+# Variable Importance Table on training dataset
+  
+vi_rf<-varImp(rForest)
+  
 # Score on validation sample only
+  
 pred_rf <- predict(rForest,dvalid)
+  
 # Confusion Matrix
+  
 CM_RF <- confusionMatrix(pred_rf,dvalid$V_Target,positive='1') 
-# AUROC
-roc_rf <- roc.curve(scores.class0 = as.numeric(as.character(pred_rf[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_rf[dvalid$V_Target=='0'])), curve=T)
+  
+# Performance metrics
+  
 # AUPRC
+  
 pr_rf <- pr.curve(scores.class0 = as.numeric(as.character(pred_rf[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_rf[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_rf.png")
-plot(roc_rf,main="AUROC Random Forest")
-dev.off()
-png("auprc_rf.png")
-plot(pr_rf,main="AUPRC Random Forest")
-dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_RF$table[2,2]
-n_miss <- CM_RF$table[1,2]
-n_fa <- CM_RF$table[2,1]
-n_cr <- CM_RF$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_rf <- tmp[1]
-  
+ 
 # Diagnostic Metrics
-diag_rf<-round(c(CM_RF$overall[1:2],
-                 pr_rf$auc.integral,
-                 CM_RF$byClass[c(3,6,7,11)],
-                 roc_rf$auc,
-                 dprime_rf$dprime,
-                round((CM_RF$table["0","1"]*cost_fn_fp_ratio+CM_RF$table["1","0"]*1)/sum(CM_RF$table),4)
-                ),4)
-names(diag_rf)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
   
+diag_rf<-round(c(CM_RF$overall[2],
+               pr_rf$auc.integral,
+               CM_RF$byClass[c(3,6)],
+              round((CM_RF$table["0","1"]*cost_fn_fp_ratio+CM_RF$table["1","0"]*1)/sum(CM_RF$table),4)
+              ),4)
+  
+names(diag_rf)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+    
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_rf.png")
+
+plot(pr_dt,main="AUPRC Random Forest")
+
+dev.off()    
+
 #####################
 # Gradient Boosting
 #####################
@@ -577,113 +601,115 @@ names(diag_rf)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1",
 #                   shrinkage=c(0.01, 0.001),
 #                   n.minobsinnode=10)
 
-gbmModel <- train(V_Target ~ los_lace + acuity + cerebrovasculardisease +
+gbmModel <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
                   diabeteswithendorgandamage + chronicpulmonarydisease + mildliverorrenaldisease +
                   anytumor + dementia + connectivetissuedisease + aids + metastaticsolidtumor + er_visits,
                   data=dtrain, method = "gbm", metric = "CostSum", maximize=F, trControl = fitControl,
                   verbose=FALSE)
 
-#Accuracy and Kappa on training dataset
+# Accuracy and Kappa on training dataset
+  
 ak_gbm<-gbmModel$results
+  
 ak_gbm<-round(ak_gbm[ak_gbm$CostSum == min(ak_gbm[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
-#Variable Importance Table on training dataset
+
+# Variable Importance Table on training dataset
+  
 vi_gbm<-varImp(gbmModel)
 
 # Score on validation sample only
+  
 pred_gbm <- predict(gbmModel,dvalid)
+  
 # Confusion Matrix
+  
 CM_GBM <- confusionMatrix(pred_gbm,dvalid$V_Target,positive='1')
-# AUROC
-roc_gbm <- roc.curve(scores.class0 = as.numeric(as.character(pred_gbm[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_gbm[dvalid$V_Target=='0'])), curve=T)
+
+# Performance metrics
+  
 # AUPRC
+  
 pr_gbm <- pr.curve(scores.class0 = as.numeric(as.character(pred_gbm[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_gbm[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_gbm.png")
-plot(roc_gbm,main="AUROC Gradient Boost")
-dev.off()
-png("auprc_gbm.png")
-plot(pr_gbm,main="AUPRC Gradient Boost")
-dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_GBM$table[2,2]
-n_miss <- CM_GBM$table[1,2]
-n_fa <- CM_GBM$table[2,1]
-n_cr <- CM_GBM$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_gbm <- tmp[1]
-
+ 
 # Diagnostic Metrics
-diag_gbm<-round(c(CM_GBM$overall[1:2],
+  
+diag_gbm<-round(c(CM_GBM$overall[2],
                  pr_gbm$auc.integral,
-                 CM_GBM$byClass[c(3,6,7,11)],
-                 roc_gbm$auc,
-                 dprime_gbm$dprime,
+                 CM_GBM$byClass[c(3,6)],
                 round((CM_GBM$table["0","1"]*cost_fn_fp_ratio+CM_GBM$table["1","0"]*1)/sum(CM_GBM$table),4)
                 ),4)
-names(diag_gbm)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+  
+names(diag_gbm)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_gbm.png")
+
+plot(pr_dt,main="AUPRC Gradient Boost")
+
+dev.off()    
   
 ##################
 # Neural Network
 ##################
 
-nnetModel <- train(V_Target ~ los_lace + acuity + cerebrovasculardisease +
+nnetModel <- train(V_Target ~ los + acuity + cerebrovasculardisease +
                   peripheralvasculardisease + diabeteswithoutcomplications + congestiveheartfailure +
                   diabeteswithendorgandamage + chronicpulmonarydisease + mildliverorrenaldisease +
                   anytumor + dementia + connectivetissuedisease + aids + metastaticsolidtumor + er_visits,
                   data=dtrain, method="nnet", metric = "CostSum", maximize=F, trControl = fitControl)
-  
-#Accuracy and Kappa on training dataset
-ak_nn<-nnetModel$results
-ak_nn<-round(ak_nn[ak_nn$CostSum == min(ak_nn[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
-#Variable Importance Table on training dataset
-vi_nn<-varImp(nnetModel)
 
+# Accuracy and Kappa on training dataset
+  
+ak_nn<-nnetModel$results
+  
+ak_nn<-round(ak_nn[ak_nn$CostSum == min(ak_nn[,"CostSum"]),c("Accuracy","Kappa","CostSum")],4)
+
+# Variable Importance Table on training dataset
+  
+vi_nn<-varImp(nnetModel)
+  
 # Score on validation sample only
+  
 pred_nn <- predict(nnetModel,dvalid)
+  
 # Confusion Matrix
+  
 CM_NN <- confusionMatrix(pred_nn,dvalid$V_Target,positive='1') 
-# AUROC
-roc_nn <- roc.curve(scores.class0 = as.numeric(as.character(pred_nn[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_nn[dvalid$V_Target=='0'])), curve=T)
+  
+# Performance metrics
+  
 # AUPRC
+  
 pr_nn <- pr.curve(scores.class0 = as.numeric(as.character(pred_nn[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_nn[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_nn.png")
-plot(roc_nn,main="AUROC Neural Net")
-dev.off()
-png("auprc_nn.png")
-plot(pr_nn,main="AUPRC Neural Net")
-dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_NN$table[2,2]
-n_miss <- CM_NN$table[1,2]
-n_fa <- CM_NN$table[2,1]
-n_cr <- CM_NN$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_nn <- tmp[1]
-
+ 
 # Diagnostic Metrics
-diag_nn<-round(c(CM_NN$overall[1:2],
+  
+diag_nn<-round(c(CM_NN$overall[2],
                  pr_nn$auc.integral,
-                 CM_NN$byClass[c(3,6,7,11)],
-                 roc_nn$auc,
-                 dprime_nn$dprime,
-                round((CM_NN$table["0","1"]*cost_fn_fp_ratio+CM_NN$table["1","0"]*1)/sum(CM_NN$table),4)
+                 CM_NN$byClass[c(3,6)],
+                 round((CM_NN$table["0","1"]*cost_fn_fp_ratio+CM_NN$table["1","0"]*1)/sum(CM_NN$table),4)
                 ),4)
-names(diag_nn)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+  
+names(diag_nn)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_nn.png")
+
+plot(pr_nn,main="AUPRC Neural Net")
+
+dev.off()    
 
 #################################
 # Ensemble Model: Majority Vote
 #################################
 
-#When applying ensemble logic to test set, copy-paste-edit the command below so that it refers to test, not training, predictions.
-#To improve, model the outcome of ensemble, see e.g. https://www.analyticsvidhya.com/blog/2017/02/introduction-to-ensembling-along-with-implementation-in-r/
+# When applying ensemble logic to test set, copy-paste-edit the command below so that it refers to test, 
+# not training, predictions.
 
 #Generate votes
 tmp_df <- data.frame(pred_lr, pred_dt, pred_rf, pred_gbm, pred_nn)
@@ -699,27 +725,13 @@ pred_esm <- ifelse(tmp_df2$sum >= 3, 1, 0)
 
 # Confusion Matrix
 CM_ESM <- confusionMatrix(as.factor(pred_esm),dvalid$V_Target,positive='1')
-# AUROC
-roc_esm <- roc.curve(scores.class0 = as.numeric(as.character(pred_esm[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_esm[dvalid$V_Target=='0'])), curve=T)
 # AUPRC
 pr_esm <- pr.curve(scores.class0 = as.numeric(as.character(pred_esm[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_esm[dvalid$V_Target=='0'])), curve = T)
 # Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_esm.png")
-plot(roc_esm,main="AUROC Ensamble Majority Vote")
-dev.off()
 png("auprc_esm.png")
 plot(pr_esm,main="AUPRC Ensamble Majority Vote")
 dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_ESM$table[2,2]
-n_miss <- CM_ESM$table[1,2]
-n_fa <- CM_ESM$table[2,1]
-n_cr <- CM_ESM$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_esm <- tmp[1]
 
 # Diagnostic Metrics
 diag_esm<-round(c(CM_ESM$overall[1:2],
@@ -738,30 +750,18 @@ names(diag_esm)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1"
 # Due to low cost of False Positive relative to False Negative,
 # it is better to produce as many positive as possible
 #######################################
+  
 pred_esp <- ifelse(tmp_df2$sum > 0, 1, 0)
 # Confusion Matrix
 CM_ESP <- confusionMatrix(as.factor(pred_esp),dvalid$V_Target,positive='1')
-# AUROC
-roc_esp <- roc.curve(scores.class0 = as.numeric(as.character(pred_esp[dvalid$V_Target=='1'])), 
-                    scores.class1 = as.numeric(as.character(pred_esp[dvalid$V_Target=='0'])), curve=T)
+
 # AUPRC
 pr_esp <- pr.curve(scores.class0 = as.numeric(as.character(pred_esp[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_esp[dvalid$V_Target=='0'])), curve = T)
 # Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auroc_esp.png")
-plot(roc_esp,main="AUROC Ensamble Max Prediction")
-dev.off()
 png("auprc_esp.png")
 plot(pr_esp,main="AUPRC Ensamble Max Prediction")
 dev.off()
-
-#Validation data: d-prime 
-n_hit <- CM_ESP$table[2,2]
-n_miss <- CM_ESP$table[1,2]
-n_fa <- CM_ESP$table[2,1]
-n_cr <- CM_ESP$table[1,1]
-tmp <- dprime(n_hit, n_miss, n_fa, n_cr) #from neuropsychology package
-dprime_esp <- tmp[1]
 
 # Diagnostic Metrics
 diag_esp<-round(c(CM_ESP$overall[1:2],
@@ -772,6 +772,14 @@ diag_esp<-round(c(CM_ESP$overall[1:2],
                 round((CM_ESP$table["0","1"]*cost_fn_fp_ratio+CM_ESP$table["1","0"]*1)/sum(CM_ESP$table),4)
                 ),4)
 names(diag_esp)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+
+###################################
+# Ensemble Model: TK Improvements
+###################################
+
+# To improve ensembling results, try to train an ensemble model that takes predictions as input, instead of imposing 
+# an arbitrary rule. 
+# see e.g. https://www.analyticsvidhya.com/blog/2017/02/introduction-to-ensembling-along-with-implementation-in-r/
 
 #################################################
 # BASELINE MODEL PERFORMANCE (VALIDATION): LACE
@@ -785,12 +793,18 @@ names(diag_esp)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1"
 
     #tk njb make sure that final performance on LACE is only computed o the "leave out" test sample. 
   
-
 # Baseline Model - LACE
 # Since LACE is a score outside of the modeling process, it can be scored here first
 # LACE score: Feature engineering that is informed by the literature and not by peeking at the data
 # Note: Adding 1 to LOS to align with LACE definition
 model$los_lace <- model$los + 1
+model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
+                       ifelse(model$los_lace <= 6, 4, 
+                              ifelse(model$los_lace <= 13, 5, 
+                                     ifelse(model$los_lace>=14, 7, 0)
+                                    )
+                             )
+                      )
 model$score_a <- model$acuity * 3
 model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
                  model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
@@ -801,13 +815,7 @@ model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculard
                  model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
                  model$metastaticsolidtumor * 6
 model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
-model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
-                       ifelse(model$los_lace <= 6, 4, 
-                              ifelse(model$los_lace <= 13, 5, 
-                                     ifelse(model$los_lace>=14, 7, 0)
-                                    )
-                             )
-                      )
+
 model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
 
 # LACE score summary
