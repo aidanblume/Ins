@@ -708,79 +708,108 @@ dev.off()
 # Ensemble Model: Majority Vote
 #################################
 
-# When applying ensemble logic to test set, copy-paste-edit the command below so that it refers to test, 
-# not training, predictions.
-
-#Generate votes
+# Create a data frame for voting
+  
 tmp_df <- data.frame(pred_lr, pred_dt, pred_rf, pred_gbm, pred_nn)
-tmp_df2 <- mutate_all(tmp_df, function(x) as.numeric(as.character(x)))
-#start validity check: with our data type issues, Qing observed elsewhere that +1 was added to as.numeric(as.character transformation)  
-test_rows <- which(pred_lr == 1)
-unique(tmp_df[test_rows, ] == tmp_df2[test_rows, ])
-#end validity check: all rows are TRUEx4. Transformation is correct; +1 is not added on top
-tmp_df2$sum <- tmp_df2$pred_lr + tmp_df2$pred_dt +tmp_df2$pred_rf + tmp_df2$pred_gbm + tmp_df2$pred_nn
+    
+## start validity check: with our data type issues, 
+## Qing observed elsewhere that +1 was added to as.numeric(as.character transformation)  
+#tmp_df2 <- mutate_all(tmp_df, function(x) as.numeric(as.character(x)))
+#test_rows <- which(pred_lr == 1)
+#unique(tmp_df[test_rows, ] == tmp_df2[test_rows, ])
+#rm(tmp_df2)
+## end validity check: all rows are TRUEx4. Transformation is correct; +1 is not added on top
+  
+tmp_df <- mutate_all(tmp_df, function(x) as.numeric(as.character(x)))
 
-#Score validation set based on majority rule (3 out of 5)
-pred_esm <- ifelse(tmp_df2$sum >= 3, 1, 0)
+# Majority Vote: Score validation set based on majority rule (3 out of 5)
+
+tmp_df$sum <- tmp_df$pred_lr + tmp_df$pred_dt +tmp_df$pred_rf + tmp_df$pred_gbm + tmp_df$pred_nn
+
+pred_esm <- ifelse(tmp_df$sum >= 3, 1, 0)
 
 # Confusion Matrix
+  
 CM_ESM <- confusionMatrix(as.factor(pred_esm),dvalid$V_Target,positive='1')
+  
+# Performance metrics
+  
 # AUPRC
+  
 pr_esm <- pr.curve(scores.class0 = as.numeric(as.character(pred_esm[dvalid$V_Target=='1'])), 
                   scores.class1 = as.numeric(as.character(pred_esm[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auprc_esm.png")
-plot(pr_esm,main="AUPRC Ensamble Majority Vote")
-dev.off()
-
+ 
 # Diagnostic Metrics
-diag_esm<-round(c(CM_ESM$overall[1:2],
+  
+diag_esm<-round(c(CM_ESM$overall[2],
                  pr_esm$auc.integral,
-                 CM_ESM$byClass[c(3,6,7,11)],
-                 roc_esm$auc,
-                 dprime_esm$dprime,
+                 CM_ESM$byClass[c(3,6)],
                 round((CM_ESM$table["0","1"]*cost_fn_fp_ratio+CM_ESM$table["1","0"]*1)/sum(CM_ESM$table),4)
                 ),4)
-names(diag_esm)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+
+names(diag_esm)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_esm.png")
+
+plot(pr_nn,main="AUPRC Ensemble Majority Vote")
+
+dev.off()    
 
 #######################################
-# Ensamble Model: Maximum Prediction
-# Score validation set based on maximum prediction rule (>0),
-# in which any model predicting positive will be positive
+# Ensemble Model: "Black Ball Wins" Vote (was Qing's "Maximum Prediction" model)
+# Score validation setwith rule "if any model predicts "positive/will be readmitted" 
+# then ensemble predicts same.
 # Due to low cost of False Positive relative to False Negative,
 # it is better to produce as many positive as possible
 #######################################
+
+# "Black-ball Wins" Vote
   
-pred_esp <- ifelse(tmp_df2$sum > 0, 1, 0)
+pred_esbbw <- ifelse(tmp_df$sum > 0, 1, 0)
+  
 # Confusion Matrix
-CM_ESP <- confusionMatrix(as.factor(pred_esp),dvalid$V_Target,positive='1')
-
+  
+CM_ESBBW <- confusionMatrix(as.factor(pred_esbbw),dvalid$V_Target,positive='1')
+  
+# Performance metrics
+  
 # AUPRC
-pr_esp <- pr.curve(scores.class0 = as.numeric(as.character(pred_esp[dvalid$V_Target=='1'])), 
-                  scores.class1 = as.numeric(as.character(pred_esp[dvalid$V_Target=='0'])), curve = T)
-# Output both AUROC and AUPRC charts to the same JPEG for further reporting
-png("auprc_esp.png")
-plot(pr_esp,main="AUPRC Ensamble Max Prediction")
-dev.off()
-
+  
+pr_esbbw <- pr.curve(scores.class0 = as.numeric(as.character(pred_esbbw[dvalid$V_Target=='1'])), 
+                  scores.class1 = as.numeric(as.character(pred_esbbw[dvalid$V_Target=='0'])), curve = T)
+ 
 # Diagnostic Metrics
-diag_esp<-round(c(CM_ESP$overall[1:2],
-                 pr_esp$auc.integral,
-                 CM_ESP$byClass[c(3,6,7,11)],
-                 roc_esp$auc,
-                 dprime_esp$dprime,
-                round((CM_ESP$table["0","1"]*cost_fn_fp_ratio+CM_ESP$table["1","0"]*1)/sum(CM_ESP$table),4)
+  
+diag_esbbw<-round(c(CM_ESBBW$overall[2],
+                 pr_esbbw$auc.integral,
+                 CM_ESBBW$byClass[c(3,6)],
+                round((CM_ESBBW$table["0","1"]*cost_fn_fp_ratio+CM_ESBBW$table["1","0"]*1)/sum(CM_ESBBW$table),4)
                 ),4)
-names(diag_esp)<-c("Accuracy","Kappa","AUPRC Integral","Precision","Recall","F1","Balanced Accuracy","AUROC","D-Prime","Cost")
+names(diag_esbbw)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
+  
+# Output chart for further reporting
+  
+png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_esbbw.png")
+
+plot(pr_nn,main="AUPRC Ensemble Black Ball Wins")
+
+dev.off()    
 
 ###################################
-# Ensemble Model: TK Improvements
+# Ensemble Model: TK Improvement Opportunity
 ###################################
 
 # To improve ensembling results, try to train an ensemble model that takes predictions as input, instead of imposing 
 # an arbitrary rule. 
 # see e.g. https://www.analyticsvidhya.com/blog/2017/02/introduction-to-ensembling-along-with-implementation-in-r/
 
+#tk njb should an ensemble model be trained on the training set? (no: risk of over-fitting) On the validation set? 
+#(no: what's left to test on?). Train on half the set-aside validation set and test on the other half (yes?).
+  
+#tk do I include the original predictors as well? So there's more context in which to select one model over another?
+  
 #################################################
 # BASELINE MODEL PERFORMANCE (VALIDATION): LACE
 # Generate predictions based on LACE scores 
