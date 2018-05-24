@@ -498,8 +498,8 @@ diag_lr<-round(c(CM_LR$overall[2],
 names(diag_lr)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
 
 # Output chart for further reporting
-  
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_lr.png")
+
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_lr.png")
 plot(pr_lr,main="AUPRC Logistic Regression")
 dev.off()
 
@@ -575,7 +575,7 @@ names(diag_dt)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_dt.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_dt.png")
 
 plot(pr_dt,main="AUPRC Decision Tree")
 
@@ -630,7 +630,7 @@ names(diag_rf)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
     
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_rf.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_rf.png")
 
 plot(pr_dt,main="AUPRC Random Forest")
 
@@ -688,7 +688,7 @@ names(diag_gbm)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_gbm.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_gbm.png")
 
 plot(pr_dt,main="AUPRC Gradient Boost")
 
@@ -741,7 +741,7 @@ names(diag_nn)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_nn.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_nn.png")
 
 plot(pr_nn,main="AUPRC Neural Net")
 
@@ -794,7 +794,7 @@ names(diag_esm)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_esm.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_esm.png")
 
 plot(pr_nn,main="AUPRC Ensemble Majority Vote")
 
@@ -834,7 +834,7 @@ names(diag_esbbw)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_esbbw.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_esbbw.png")
 
 plot(pr_nn,main="AUPRC Ensemble Black Ball Wins")
 
@@ -857,59 +857,46 @@ dev.off()
 # x is determined by the proportion of 1s in the trained model predictions.
 #################################################
 
+# Generate LACE scores
+  
 # Note: Adding 1 to LOS to align with LACE definition
+dvalid$los_lace <- dvalid$los + 1
   
-  
-  
-  
-  
-
-#tktktktk THIS IS WHERE REVIEW STOPPED, PENDING GENERATION OF RANDOM FOREST
-  
-  
-  #########above was cut and pasted from top of file
-
-#tk njb : only use dvalid rather than model data set
-
-model$los_lace <- model$los + 1
-  
-model$score_l = ifelse(model$los_lace <= 3, model$los_lace, 
-                       ifelse(model$los_lace <= 6, 4, 
-                              ifelse(model$los_lace <= 13, 5, 
-                                     ifelse(model$los_lace>=14, 7, 0)
+dvalid$score_l = ifelse(dvalid$los_lace <= 3, dvalid$los_lace, 
+                       ifelse(dvalid$los_lace <= 6, 4, 
+                              ifelse(dvalid$los_lace <= 13, 5, 
+                                     ifelse(dvalid$los_lace>=14, 7, 0)
                                     )
                              )
                       )
 
-model$score_a <- model$acuity * 3
+dvalid$score_a <- dvalid$acuity * 3
 
-model$score_c <- model$previousmyocardialinfarction * 1 + model$cerebrovasculardisease * 1 +
-                 model$peripheralvasculardisease * 1 + model$diabeteswithoutcomplications * 1 +
-                 model$congestiveheartfailure * 2 + model$diabeteswithendorgandamage * 2 +
-                 model$chronicpulmonarydisease * 2 + model$mildliverorrenaldisease * 2 +
-                 model$anytumor * 2 +
-                 model$dementia * 3 + model$connectivetissuedisease * 3 +
-                 model$aids * 4 + model$moderateorsevereliverorrenaldisease * 4 +
-                 model$metastaticsolidtumor * 6
+dvalid$score_c <- dvalid$previousmyocardialinfarction * 1 + dvalid$cerebrovasculardisease * 1 +
+                 dvalid$peripheralvasculardisease * 1 + dvalid$diabeteswithoutcomplications * 1 +
+                 dvalid$congestiveheartfailure * 2 + dvalid$diabeteswithendorgandamage * 2 +
+                 dvalid$chronicpulmonarydisease * 2 + dvalid$mildliverorrenaldisease * 2 +
+                 dvalid$anytumor * 2 +
+                 dvalid$dementia * 3 + dvalid$connectivetissuedisease * 3 +
+                 dvalid$aids * 4 + dvalid$moderateorsevereliverorrenaldisease * 4 +
+                 dvalid$metastaticsolidtumor * 6
 
-model$score_e = ifelse(model$er_visits>4, 4, model$er_visits)
+dvalid$score_e = ifelse(dvalid$er_visits>4, 4, dvalid$er_visits)
 
-model$score_lace = model$score_l + model$score_a + model$score_c + model$score_e
+dvalid$score_lace = dvalid$score_l + dvalid$score_a + dvalid$score_c + dvalid$score_e
 
-# LACE score summary
-model %>% count(score_lace)
-  
-# tk njb insert graph 
+#convoluted way to code freq distr
+frequency_distribution <- dvalid %>% 
+  group_by(score_lace) %>% 
+  summarize(n = n()) %>% 
+  arrange(score_lace) %>% collect()
 
-  #########above was cut and pasted from top of file
+#The following line is a simpler way to code frequency_distribution
+frequency_distribution <- dvalid %>% count(score_lace)
   
-  
-  
-  
-  
-  
-  
-# Score on validation sample only
+ggplot(frequency_distribution, aes( x=score_lace, y=n )) +   
+  geom_line()+
+  geom_point()   
   
 pred_lace<-(dvalid$score_lace>=10)*1
   
@@ -936,7 +923,7 @@ names(diag_lace)<-c("Kappa","AUPRC","Precision","Recall", "Cost")
   
 # Output chart for further reporting
   
-png("Readmissions/Code/Modeling/Iteration1_vsLACE/Output/auprc_lace.png")
+png("Readmissions/Docs/Model/Model_1/Graphs/auprc_lace.png")
 
 plot(pr_nn,main="AUPRC Baseline - LACE")
 
@@ -951,6 +938,22 @@ dev.off()
 ## FUTURE AVENUES FOR IMPROVEMENT  
 
   
+###################################
+## REPORT
+###################################
+
+## Generate report in markdown, 
+  ## noting how subiterations differ
+  ## with persistent graphs
+  ##have current version be our baseline
+  ##(later) fix HTML report output
+
+###################################
+## Training metrics
+###################################
+
+## Contrast output when you use acc, costfun, kappa, F1, d' as training metrics
+
 ###################################
 ## TUNING GRID
 ###################################
@@ -1023,34 +1026,44 @@ dev.off()
 ## Group statistics across models
 ##################################################################
     
-# Combine Accuracy and Kappa from all models into a single data table
+# Combine (Training) Accuracy and Kappa from all models into a single data table
+  
 ak<-as.data.frame(rbind(c("Logistic Regression",ak_lr),
                         c("Decision Tree",ak_dt),
                         c("Random Forest",ak_rf),
                         c("Gradient Boost",ak_gbm),
                         c("Neural Net",ak_nn)))
+
 names(ak)[1]<-"Model"
 
 # Combine Variable Importance Tables from all models into a single data table
+  
 vi_lr_df<-data.frame(cbind(rownames(vi_lr$importance),round(vi_lr$importance,4)))
+  
 names(vi_lr_df)<-c("VarName","VI_LR")
     
 vi_dt_df<-data.frame(cbind(rownames(vi_dt$importance),round(vi_dt$importance,4)))
+  
 names(vi_dt_df)<-c("VarName","VI_DT")
 
 vi_rf_df<-data.frame(cbind(rownames(vi_rf$importance),round(vi_rf$importance,4)))
+  
 names(vi_rf_df)<-c("VarName","VI_RF")
 
 vi_gbm_df<-data.frame(cbind(rownames(vi_gbm$importance),round(vi_gbm$importance,4)))
+  
 names(vi_gbm_df)<-c("VarName","VI_GBM")
 
 vi_nn_df<-data.frame(cbind(rownames(vi_nn$importance),round(vi_nn$importance,4)))
+  
 names(vi_nn_df)<-c("VarName","VI_NN")
 
 vi<-merge(merge(merge(vi_lr_df,vi_dt_df),merge(vi_rf_df,vi_gbm_df)),vi_nn_df)
+  
 vi<-vi[order(-vi$VI_DT),]
 
 # Combine Diagnostic Metrics from all models into a single data table
+
 diag<-as.data.frame(rbind(c("Logistic Regression",diag_lr),
                           c("Decision Tree",diag_dt),
                           c("Random Forest",diag_rf),
@@ -1059,17 +1072,23 @@ diag<-as.data.frame(rbind(c("Logistic Regression",diag_lr),
                           c("Ensemble-Majority",diag_esm),
                           c("Ensemble-Black Ball Wins",diag_esbbw),
                           c("Baseline - LACE",diag_lace)))
+
 names(diag)[1]<-"Model"
   
 ########################
 # Output report to DOC  
 ########################
-rtffile <- RTF(paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"),".doc"),
+  
+rtffile <- RTF(paste("Readmissions/Docs/Model/Model_1/Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"),".doc"),
                font.size=10)
+  
 addHeader(rtffile,"Readmission Modeling Report",font.size=12,TOC.level=1)
+addHeader(rtffile,"Iteration 1: Trained vs. LACE",font.size=12,TOC.level=1)
 addHeader(rtffile,paste("This report is generated on ",format(Sys.time(),format="%m/%d/%Y @ %H:%M:%S.")))
+  
 addHeader(rtffile,"Training Sample",font.size=11)
   increaseIndent(rtffile)
+  
   addParagraph(rtffile,"Accuracy and Kappa")
   addNewLine(rtffile,n=1)
   addTable(rtffile,ak,col.width=c(1.4,0.8,0.8,0.8))
@@ -1078,8 +1097,10 @@ addHeader(rtffile,"Training Sample",font.size=11)
   addTable(rtffile,vi,col.width=c(1.8,0.8,0.8,0.8,0.8,0.8))
   addNewLine(rtffile,n=1)
 decreaseIndent(rtffile)
+
 addHeader(rtffile,"Validation Sample",font.size=11)
   increaseIndent(rtffile)
+  
   addParagraph(rtffile,"Confusion Matrix")
     increaseIndent(rtffile)
     addParagraph(rtffile,"CM (Logistic Regression)")
@@ -1092,41 +1113,38 @@ addHeader(rtffile,"Validation Sample",font.size=11)
     addTable(rtffile,CM_GBM$table,col.width=c(1.0,0.8,0.8))
     addParagraph(rtffile,"CM (Neural Net)")
     addTable(rtffile,CM_NN$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Ensamble Majority Vote)")
+    addParagraph(rtffile,"CM (Ensemble Majority Vote)")
     addTable(rtffile,CM_ESM$table,col.width=c(1.0,0.8,0.8))
-    addParagraph(rtffile,"CM (Ensamble Maximum Prediction)")
-    addTable(rtffile,CM_ESP$table,col.width=c(1.0,0.8,0.8))
+    addParagraph(rtffile,"CM (Ensemble Black Ball Wins)")
+    addTable(rtffile,CM_ESBBW$table,col.width=c(1.0,0.8,0.8))
     addParagraph(rtffile,"CM (Baseline - LACE)")
     addTable(rtffile,CM_LACE$table,col.width=c(1.0,0.8,0.8))
     addNewLine(rtffile,n=1)
   decreaseIndent(rtffile)
   addPageBreak(rtffile)
+
   addParagraph(rtffile,"Diagnostic Metrics")
+  # (TK OPTION: if cost sum is used, then note:)
   addParagraph(rtffile,paste(" Note: Assumes False Negative is ",cost_fn_fp_ratio," times more costly than False Positive."))
   decreaseIndent(rtffile)
-  addTable(rtffile,diag[,c(1,2,3,4,5,6,9,10,11)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55,0.65,0.65,0.55))
+  #old: addTable(rtffile,diag[,c(1,2,3,4,5,6,9,10,11)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55,0.65,0.65,0.55))
+  addTable(rtffile,diag[,c(1,2,3,4,5,6)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55))
   increaseIndent(rtffile)
   addNewLine(rtffile,n=1)
-  addParagraph(rtffile,"AUROC and AUPRC")
+  
+  addParagraph(rtffile,"AUPRC")
     increaseIndent(rtffile)
-    addPng.RTF(rtffile,file = "auroc_lr.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_lr.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_dt.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_dt.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_rf.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_rf.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_gbm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_gbm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_nn.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_nn.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_esm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_esm.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_esp.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_esp.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auroc_lace.png", width = 2.6, height = 2.4) 
-    addPng.RTF(rtffile,file = "auprc_lace.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_lr.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_dt.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_rf.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_gbm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_nn.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_esm.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_esbbw.png", width = 2.6, height = 2.4) 
+    addPng.RTF(rtffile,file = "Readmissions/Docs/Model/Model_1/Graphs/auprc_lace.png", width = 2.6, height = 2.4) 
     addNewLine(rtffile,n=1)
   decreaseIndent(rtffile)
+
 done(rtffile)
   
 ##################################
@@ -1134,13 +1152,14 @@ done(rtffile)
 # In development, format can be improved. 
 # Unclear if this is the right output desired.
 ##################################    
-# TK Report
-HTMLStart(outdir="/home/cdsw",file=paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S")),extension="html",echo=F,HTML=T)
+  
+HTMLStart(outdir="/home/cdsw",file=paste("Readmissions/Docs/Model/Model_1/Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S")),extension="html",echo=F,HTML=T)
+
 HTML.title("Readmission Modeling Report",HR=1)
   
-
 filename=paste("Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"))
-HTMLStart(outdir="/home/cdsw",file=filename,extension="html",echo=F,HTML=T)
+
+HTMLStart(outdir="/home/cdsw/Readmissions/Docs/Model/Model_1/",file=filename,extension="html",echo=F,HTML=T)
 
 HTML.title("Readmission Modeling Report",HR=1)
 
@@ -1174,6 +1193,7 @@ diag
 
 HTMLhr()
 
+#tk need to add directory?
 HTML.title("Readmission - AUROC and AUPRC",HR=3)
 HTML.title("Readmission - AUROC and AUPRC (Logistic Regression)",HR=4)
 HTMLInsertGraph("auroc_lr.png", Caption="Linear Regression", append=T)
