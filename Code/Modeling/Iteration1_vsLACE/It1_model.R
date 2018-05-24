@@ -13,6 +13,9 @@
 ###########################################################################################################
 ###########################################################################################################
 
+
+set.seed(1234) #(TK SEED)
+
   
   
 
@@ -149,7 +152,6 @@ model <- model[ , -which(names(model) %in% c("cin_no", "cci", "is_followed_by_de
 #######################################
   
 # Random sampling, partition data into training (70%), remaining for validation (30%)
-set.seed(1234) #(TK SEED)
 inTrain <- createDataPartition(y=model$is_followed_by_a_30d_readmit, p=0.7, list=F)
 dtrain_orig <- model[inTrain,]
 dvalid_orig <- model[-inTrain,]
@@ -1082,10 +1084,19 @@ names(diag)[1]<-"Model"
 rtffile <- RTF(paste("Readmissions/Docs/Model/Model_1/Readmission_",format(Sys.time(),format="%Y%m%d_%H%M%S"),".doc"),
                font.size=10)
   
-addHeader(rtffile,"Readmission Modeling Report",font.size=12,TOC.level=1)
-addHeader(rtffile,"Iteration 1: Trained vs. LACE",font.size=12,TOC.level=1)
-addHeader(rtffile,paste("This report is generated on ",format(Sys.time(),format="%m/%d/%Y @ %H:%M:%S.")))
-  
+addHeader(rtffile,"Readmission Modeling Report",font.size=13, TOC.level=1)
+addHeader(rtffile,"Iteration 1: Trained vs. LACE",font.size=13, TOC.level=1)
+  addNewLine(rtffile,n=3)
+addHeader(rtffile,"Parameters",font.size=11)
+  addParagraph(rtffile,paste("Input fields: LACE set", " - ", 
+                             "Transformations: Upsampled; LOS ceiling", " - ", 
+                             "Training metric: Cost Function", " - ", 
+                             "Performance metric: Kappa, AUPRC", " - ", 
+                             "This report is generated on ",format(Sys.time(),format="%m/%d/%Y @ %H:%M:%S.")
+                            )
+              )
+  addNewLine(rtffile,n=1)
+ 
 addHeader(rtffile,"Training Sample",font.size=11)
   increaseIndent(rtffile)
   
@@ -1094,14 +1105,25 @@ addHeader(rtffile,"Training Sample",font.size=11)
   addTable(rtffile,ak,col.width=c(1.4,0.8,0.8,0.8))
   addNewLine(rtffile,n=1)
   addParagraph(rtffile,"Variable Importance")
+  addNewLine(rtffile,n=1)
   addTable(rtffile,vi,col.width=c(1.8,0.8,0.8,0.8,0.8,0.8))
   addNewLine(rtffile,n=1)
 decreaseIndent(rtffile)
+addPageBreak(rtffile)
 
 addHeader(rtffile,"Validation Sample",font.size=11)
   increaseIndent(rtffile)
   
+  addParagraph(rtffile,"Diagnostic Metrics")
+  # (TK OPTION: if cost sum is used, then note:)
+  addParagraph(rtffile,paste("Note: Assumes False Negative is ",cost_fn_fp_ratio," times more costly than False Positive."))
+  addNewLine(rtffile,n=1)
+  addTable(rtffile,diag[,c(1,2,3,4,5,6)],col.width=c(1.25,0.75,0.75,0.75,0.75,0.75))
+  addNewLine(rtffile,n=1)
+  addPageBreak(rtffile)
+  
   addParagraph(rtffile,"Confusion Matrix")
+    addNewLine(rtffile,n=1)
     increaseIndent(rtffile)
     addParagraph(rtffile,"CM (Logistic Regression)")
     addTable(rtffile,CM_LR$table,col.width=c(1.0,0.8,0.8))
@@ -1123,14 +1145,7 @@ addHeader(rtffile,"Validation Sample",font.size=11)
   decreaseIndent(rtffile)
   addPageBreak(rtffile)
 
-  addParagraph(rtffile,"Diagnostic Metrics")
-  # (TK OPTION: if cost sum is used, then note:)
-  addParagraph(rtffile,paste(" Note: Assumes False Negative is ",cost_fn_fp_ratio," times more costly than False Positive."))
-  decreaseIndent(rtffile)
-  #old: addTable(rtffile,diag[,c(1,2,3,4,5,6,9,10,11)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55,0.65,0.65,0.55))
-  addTable(rtffile,diag[,c(1,2,3,4,5,6)],col.width=c(1.25,0.75,0.55,0.65,0.70,0.55))
-  increaseIndent(rtffile)
-  addNewLine(rtffile,n=1)
+
   
   addParagraph(rtffile,"AUPRC")
     increaseIndent(rtffile)
