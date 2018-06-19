@@ -1,0 +1,28 @@
+use flatfile ;
+
+
+CREATE external TABLE IF NOT EXISTS `tmp_areadeprivationindex_20180319`
+  (
+	zip_code_plus4_txt	String,
+	dep_2000_90coeff_index	DOUBLE
+  )
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','  STORED AS TEXTFILE 
+LOCATION  '/user/hive/warehouse/flatfile.db/tmp_areadeprivationindex_20180319';
+
+
+CREATE EXTERNAL TABLE IF NOT EXISTS `areadeprivationindex_20180319`(	
+  `zip_code_plus4_txt` string, 	
+  `dep_2000_90coeff_index` double)	
+STORED AS PARQUET
+LOCATION	
+  '/user/hive/warehouse/flatfile.db/areadeprivationindex_20180319';
+  
+SET parquet.compression=SNAPPY;
+
+insert overwrite table areadeprivationindex_20180319 
+SELECT  zip_code_plus4_txt ,
+cast(dep_2000_90coeff_index as double)
+FROM tmp_areadeprivationindex_20180319 ;
+
+drop table tmp_areadeprivationindex_20180319 purge;
+  
