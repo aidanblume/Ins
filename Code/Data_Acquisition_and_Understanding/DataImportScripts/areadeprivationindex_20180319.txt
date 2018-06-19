@@ -1,7 +1,7 @@
 use flatfile ;
 
 
-CREATE external TABLE IF NOT EXISTS `tmp_areadeprivationindex_20180319`
+CREATE TABLE IF NOT EXISTS `tmp_areadeprivationindex_20180319`
   (
 	zip_code_plus4_txt	String,
 	dep_2000_90coeff_index	DOUBLE
