@@ -1,0 +1,55 @@
+use flatfile;
+
+create table IF NOT EXISTS tmp_qot_2017_logisticare_complaints(
+last_name string,
+first_name string,
+cin_no string,
+incident_date string,
+level_of_services string,
+allegation string,
+interview_summary string,
+actions string,
+PQ_code string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+ "separatorChar" = ",",
+ "quoteChar"  = "\""
+)
+stored as textfile
+LOCATION '/user/hive/warehouse/flatfile.db/tmp_qot_2017_logisticare_complaints'
+tblproperties ("skip.header.line.count"="1");
+
+create external table IF NOT EXISTS qot_2017_logisticare_complaints(
+last_name string,
+first_name string,
+cin_no string,
+incident_date timestamp,
+incident_date_str string,
+level_of_services string,
+allegation string,
+interview_summary string,
+actions string,
+PQ_code string
+)
+stored as parquet
+LOCATION '/user/hive/warehouse/flatfile.db/qot_2017_logisticare_complaints';
+
+SET parquet.compression=SNAPPY; 
+
+insert overwrite table qot_2017_logisticare_complaints
+SELECT trim(last_name),
+trim(first_name),
+trim(cin_no),
+cast(FROM_UNIXTIME(UNIX_TIMESTAMP(incident_date,'MM/dd/yyyy')) as timestamp),
+incident_date,
+trim(level_of_services),
+trim(allegation),
+trim(interview_summary),
+trim(actions),
+trim(PQ_code)
+FROM tmp_qot_2017_logisticare_complaints;
+
+drop table flatfile.tmp_qot_2017_logisticare_complaints purge ;
+
