@@ -7,11 +7,8 @@ Output:             NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ***/
 
 /*
-IS A 30 d, 90 d READMIT? For each case, is it preceded by an admission within 30 days or not? Label 'I' if no, and 'R' if yes. 
-
-Create a copy of the input table called tmp. Join input table to copy with offset 1. Save values for latest admit per row, plus save small set of data concerning earliest admit if exists. 
-To solve row shearing from join, add a dummy row to tmp with rownumber is 0, dis_dt/adm_dt 100 years in past, and other vals null.
-
+Compute "is_a_30d_readmit" and "is_a_90d_readmit".
+This label is used when computing readmission rates at readmitting facilities, PPG, and other long term care facilities.
 */
 
 drop table if exists nathalie.tmp
@@ -58,7 +55,8 @@ FROM
 
 
 /*
-PRECEDES A READMIT BY 30 d, 90 d? For each case, is it followed by a readmission within 30 days or not
+Compute "is_followed_by_a_30d_readmit" and "is_followed_by_a_90d_readmit".
+This label is used as the outcome label when computing readmission rates at index facilities and when training a readmission prediction model.
 */
 
 drop table if exists NATHALIE.tmp2;
