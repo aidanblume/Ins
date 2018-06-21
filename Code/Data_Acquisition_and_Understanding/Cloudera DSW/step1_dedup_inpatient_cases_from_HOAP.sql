@@ -6,17 +6,17 @@ Description:        Generates a data set of acute inpatient cases (=stays) from 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        HOAP.HOA QNXT, CLM and ENC case tables. 
 Output:             NATHALIE.prjrea_step1_inpatient_cases
+Notes:      		1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
+					This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
+					2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
+					3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
+					4. Some overlapping stays remain by Iteration 16. See, e.g. cin_no '93066483A' for whom stays are complex possibly because some SNFs have not been eliminated from capture. 
+					5. For improvements: see email from Chee <Thu 6/21/2018 9:45 AM> advocating for non-HOAP use. 
 ***/
 
 /*
 UNIQUE_CASES
-
 Purpose:    To merge data from HOA's 3 case tables with priority QNXT>CLM>ENC
-Notes:      1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
-            This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
-            2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
-            3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
-            4. Some overlapping stays remain by Iteration 16. See, e.g. cin_no '93066483A' for whom stays are complex possibly because some SNFs have not been eliminated from capture. 
 */
 
 create table NATHALIE.TMP_UNIQUE_CASES 
