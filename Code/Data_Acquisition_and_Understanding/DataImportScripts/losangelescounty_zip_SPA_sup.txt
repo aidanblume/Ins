@@ -1,0 +1,32 @@
+use flatfile;
+
+CREATE table tmp_losangelescounty_zip_SPA_sup (
+zip_code string,
+area_name string,
+SPA string,
+supervisiorial_districts string
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE
+LOCATION '/user/hive/warehouse/flatfile.db/tmp_losangelescounty_zip_SPA_sup/';
+
+
+CREATE external  table if not exists losangelescounty_zip_SPA_sup (
+zip_code string,
+area_name string,
+SPA string,
+supervisiorial_districts string
+) 
+STORED AS PARQUET
+LOCATION '/user/hive/warehouse/flatfile.db/losangelescounty_zip_SPA_sup/';
+
+SET parquet.compression=SNAPPY;
+
+insert overwrite table losangelescounty_zip_SPA_sup
+SELECT
+zip_code,
+area_name ,
+SPA ,
+supervisiorial_districts 
+FROM tmp_losangelescounty_zip_SPA_sup;
+
+drop table tmp_losangelescounty_zip_SPA_sup;

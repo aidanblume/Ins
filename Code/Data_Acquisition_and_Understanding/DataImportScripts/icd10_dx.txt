@@ -1,0 +1,33 @@
+create table IF NOT EXISTS tmp_icd10_dx(
+s_no string,
+code string,
+description string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+ "separatorChar" = ",",
+ "quoteChar"  = "\""
+)
+stored as textfile
+LOCATION '/user/hive/warehouse/flatfile.db/tmp_icd10_dx'
+tblproperties ("skip.header.line.count"="1");
+
+
+create external table IF NOT EXISTS icd10_dx(
+s_no string,
+code string,
+description string
+)
+stored as parquet
+LOCATION '/user/hive/warehouse/flatfile.db/icd10_dx';
+
+SET parquet.compression=SNAPPY; 
+
+insert overwrite table icd10_dx
+SELECT trim(s_no),
+trim(code),
+trim(description)
+FROM tmp_icd10_dx;
+
+drop table tmp_icd10_dx purge;

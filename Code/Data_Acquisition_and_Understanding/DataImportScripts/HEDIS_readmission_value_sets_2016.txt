@@ -1,0 +1,49 @@
+use flatfile ;
+
+DROP TABLE IF EXISTS tmp_HEDIS_readmission_value_sets_2016 PURGE;
+
+CREATE table `tmp_HEDIS_readmission_value_sets_2016`
+  (
+Value_Set_Name	String,
+Value_Set_OID	String,
+Value_Set_Version	String,
+Code	String,
+Definition	String,
+Code_System	String,
+Code_System_OID	String,
+Code_System_Version	String
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','  
+STORED AS TEXTFILE 
+LOCATION  '/user/hive/warehouse/flatfile.db/tmp_HEDIS_readmission_value_sets_2016/';
+
+
+CREATE external table if NOT EXISTS `HEDIS_readmission_value_sets_2016`
+  (
+Value_Set_Name	String,
+Value_Set_OID	String,
+Value_Set_Version	timestamp,
+Code	String,
+Definition	String,
+Code_System	String,
+Code_System_OID	String,
+Code_System_Version	String
+)
+STORED AS parquet 
+LOCATION  '/user/hive/warehouse/flatfile.db/HEDIS_readmission_value_sets_2016/';
+
+SET parquet.compression=SNAPPY;
+
+insert overwrite table HEDIS_readmission_value_sets_2016
+SELECT
+ Value_Set_Name	,
+Value_Set_OID	,
+cast(Value_Set_Version as timestamp),
+Code	,
+Definition	,
+Code_System	,
+Code_System_OID	,
+Code_System_Version	
+FROM tmp_HEDIS_readmission_value_sets_2016 ;
+
+drop table tmp_HEDIS_readmission_value_sets_2016;

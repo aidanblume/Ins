@@ -1,0 +1,32 @@
+CREATE table tmp_losangelescounty_zip_city_pop (
+zip_code string,
+classification string,
+city string,
+population string,
+area_codes string
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE
+LOCATION '/user/hive/warehouse/flatfile.db/tmp_losangelescounty_zip_city_pop;
+
+CREATE EXTERNAL TABLE if not exists `losangelescounty_zip_city_pop`(	
+  `zip_code` string, 	
+  `classification` string, 	
+  `city` string, 	
+  `population` double, 	
+  `area_codes` string)	
+STORED AS PARQUET
+LOCATION	
+  '/user/hive/warehouse/flatfile.db/losangelescounty_zip_city_pop';
+
+  
+SET parquet.compression=SNAPPY;
+
+insert overwrite table losangelescounty_zip_city_pop 
+SELECT  zip_code ,
+classification ,
+city ,
+cast(population as double),
+area_codes 
+FROM tmp_losangelescounty_zip_city_pop ;
+
+drop table tmp_losangelescounty_zip_city_pop purge;

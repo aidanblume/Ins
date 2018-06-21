@@ -1,0 +1,34 @@
+use flatfile;
+
+create table IF NOT EXISTS tmp_qot_2017_pq_code(
+code string,
+description string,
+examples string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES 
+(
+ "separatorChar" = ",",
+ "quoteChar"  = "\""
+)
+stored as textfile
+LOCATION '/user/hive/warehouse/flatfile.db/tmp_qot_2017_pq_code'
+tblproperties ("skip.header.line.count"="1");
+
+create external table IF NOT EXISTS qot_2017_pq_code(
+code string,
+description string,
+examples string
+)
+stored as parquet
+LOCATION '/user/hive/warehouse/flatfile.db/qot_2017_pq_code';
+
+SET parquet.compression=SNAPPY; 
+
+insert overwrite table qot_2017_pq_code
+SELECT trim(code),
+trim(description),
+trim(examples)
+FROM tmp_qot_2017_pq_code;
+
+drop table tmp_qot_2017_pq_code purge;
