@@ -72,7 +72,8 @@ left join
                 from hoap.clm_hdr_inpsnf hdr join hoap.clm_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
                 where substr(type_bill,1,2) in ('11','12')
-                and det.rev_cd in ('0450', '0451', '0452', '0453', '0454', '0455', '0456', '0457', '0458', '0459')
+                and det.rev_cd in ('0450', '0451', '0452', '0453', '0454', '0455', '0456', '0457'
+                    , '0458', '0459', '450', '451', '452', '453', '454', '455', '456', '457', '458', '459')
                 and hdr.admit_dt_clm is not null
                 union
                 select distinct hdr.case_id, hdr.cin_no, trunc(hdr.admit_dt_clm, 'DD') as er_adm_dt 
@@ -80,7 +81,8 @@ left join
                 from hoap.enc_hdr_inpsnf hdr join hoap.enc_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
                 where substr(type_bill,1,2) in ('11','12')
-                and det.rev_cd in ('0450', '0451', '0452', '0453', '0454', '0455', '0456', '0457', '0458', '0459')
+                and det.rev_cd in ('0450', '0451', '0452', '0453', '0454', '0455', '0456', '0457'
+                    , '0458', '0459', '450', '451', '452', '453', '454', '455', '456', '457', '458', '459')
                 and hdr.admit_dt_clm is not null
             ) ALL_ER
         ) rownumber_added
