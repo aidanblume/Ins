@@ -63,3 +63,17 @@ SELECT
     , is_followed_by_death_or_readmit   --alt output label addition
 FROM NATHALIE.PRJREA_ANALYTIC_SET
 ;
+
+/*
+CLEAN UP
+*/
+
+drop table if exists nathalie.prjrea_step1_inpatient_cases;
+drop table if exists nathalie.prjrea_step2_readmit_labels;
+drop table if exists nathalie.prjrea_step3_lob_pcp;
+drop table if exists nathalie.prjrea_step4a_demog;
+drop table if exists nathalie.prjrea_step4b_hospitals;
+drop table if exists nathalie.prjrea_step4c_ppg;
+drop table if exists nathalie.prjrea_step4d_snf;
+drop table if exists nathalie.prjrea_step5_er;
+drop table if exists nathalie.prjrea_step6_lace_comorbidities;
