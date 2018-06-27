@@ -6,16 +6,17 @@ Description:        Generates a data set of acute inpatient cases (=stays) from 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        HOAP.HOA QNXT, CLM and ENC case tables. 
 Output:             NATHALIE.prjrea_step1_inpatient_cases
-Notes:      		1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
-					This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
-					2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
-					3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
-					4. Some overlapping stays remain by Iteration 16. See, e.g. cin_no '93066483A' for whom stays are complex possibly because some SNFs have not been eliminated from capture. 
-					5. For improvements: see email from Chee <Thu 6/21/2018 9:45 AM> advocating for non-HOAP use. 
+Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
+                    This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
+                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
+                    3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
+                    4. Some overlapping stays remain by Iteration 16. See, e.g. cin_no '93066483A' for whom stays are complex possibly because some SNFs have not been eliminated from capture. 
+                    5. For improvements: see email from Chee <Thu 6/21/2018 9:45 AM> advocating for non-HOAP use. 
 ***/
 
 /*
 UNIQUE_CASES
+
 Purpose:    To merge data from HOA's 3 case tables with priority QNXT>CLM>ENC
 */
 
@@ -39,24 +40,24 @@ from
         from
         ( -- union of cases across 3 data tables: qnxt, clm, enc
             select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1
-            , case_pr1
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
             , severity, aprdrg, dis_status, provider, paid_amt_case, from_er
             , 1 as source_table
             from hoap.QNXT_CASE_INPSNF as Q
             where srv_cat = '01ip_a'
             union
             select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1
-            , case_pr1
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
             , severity, aprdrg, dis_status, provider, paid_amt_case, from_er
             , 2 as source_table
             from hoap.clm_case_inpsnf as C
             where srv_cat = '01ip_a'
             union
             select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1 
-            , case_pr1
+            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
             , severity, aprdrg, dis_status, provider, null as paid_amt_case, from_er
             , 3 as source_table
             from hoap.ENC_CASE_INPSNF as E
@@ -70,7 +71,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no 
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, 4 as source_table
                 , 1 as rownumber
         ) PADDING
@@ -93,6 +97,9 @@ Notes:      1. Awkward implementation because looping is not permitted in Impala
 */
 
 -- Iteration 1
+
+refresh nathalie.TMP_UNIQUE_CASES
+;
 
 create table NATHALIE.TMP_FUSED_CASES_1
 as
@@ -117,7 +124,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -130,7 +140,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -160,7 +174,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -174,6 +191,9 @@ The next set of 'Iteration x' are identical to Iteration 1 excpet for the table 
 */
 
 -- Iteration 2
+
+refresh nathalie.TMP_FUSED_CASES_1
+;
 
 create table NATHALIE.TMP_FUSED_CASES_2
 as
@@ -198,7 +218,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -211,7 +234,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -241,7 +268,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -251,6 +281,9 @@ where rownumber = 1
 ;
     
 -- Iteration 3
+
+refresh nathalie.TMP_FUSED_CASES_2
+;
 
 create table NATHALIE.TMP_FUSED_CASES_3
 as
@@ -275,7 +308,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -288,7 +324,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -318,7 +358,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -328,6 +371,9 @@ where rownumber = 1
 ;
    
 -- Iteration 4
+
+refresh nathalie.TMP_FUSED_CASES_3
+;
 
 create table NATHALIE.TMP_FUSED_CASES_4
 as
@@ -352,7 +398,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -365,7 +414,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -395,7 +448,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -405,6 +461,9 @@ where rownumber = 1
 ;
 
 --Iteration 5
+
+refresh nathalie.TMP_FUSED_CASES_4
+;
 
 create table NATHALIE.TMP_FUSED_CASES_5
 as
@@ -429,7 +488,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -442,7 +504,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -472,7 +538,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -482,6 +551,9 @@ where rownumber = 1
 ;
 
 --Iteration 6
+
+refresh nathalie.TMP_FUSED_CASES_5
+;
 
 create table NATHALIE.TMP_FUSED_CASES_6
 as
@@ -506,7 +578,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -519,7 +594,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -549,7 +628,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -559,6 +641,9 @@ where rownumber = 1
 ;
 
 -- Iteration 7 
+
+refresh nathalie.TMP_FUSED_CASES_6
+;
 
 create table NATHALIE.TMP_FUSED_CASES_7
 as
@@ -583,7 +668,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -596,7 +684,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -626,7 +718,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -637,6 +732,9 @@ where rownumber = 1
 
 
 --Iteration 8
+
+refresh nathalie.TMP_FUSED_CASES_7
+;
 
 create table NATHALIE.TMP_FUSED_CASES_8
 as
@@ -661,7 +759,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -674,7 +775,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -704,7 +809,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -715,6 +823,9 @@ where rownumber = 1
 
 
 --Iteration 9
+
+refresh nathalie.TMP_FUSED_CASES_8
+;
 
 create table NATHALIE.TMP_FUSED_CASES_9
 as
@@ -739,7 +850,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -752,7 +866,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -782,7 +900,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -792,6 +913,9 @@ where rownumber = 1
 ;
 
 --Iteration 10
+
+refresh nathalie.TMP_FUSED_CASES_9
+;
 
 create table NATHALIE.TMP_FUSED_CASES_10
 as
@@ -816,7 +940,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -829,7 +956,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -859,7 +990,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -869,6 +1003,9 @@ where rownumber = 1
 ;
 
 --Iteration 11
+
+refresh nathalie.TMP_FUSED_CASES_10
+;
 
 create table NATHALIE.TMP_FUSED_CASES_11
 as
@@ -893,7 +1030,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -906,7 +1046,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -936,7 +1080,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -946,6 +1093,9 @@ where rownumber = 1
 ;
 
 --Iteration 12
+
+refresh nathalie.TMP_FUSED_CASES_11
+;
 
 create table NATHALIE.TMP_FUSED_CASES_12
 as
@@ -970,7 +1120,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -983,7 +1136,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -1013,7 +1170,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -1023,6 +1183,9 @@ where rownumber = 1
 ;
 
 --Iteration 13
+
+refresh nathalie.TMP_FUSED_CASES_12
+;
 
 create table NATHALIE.TMP_FUSED_CASES_13
 as
@@ -1047,7 +1210,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -1060,7 +1226,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -1090,7 +1260,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -1100,6 +1273,9 @@ where rownumber = 1
 ;
 
 --Iteration 14
+
+refresh nathalie.tmp_fused_cases_13
+;
 
 create table NATHALIE.TMP_FUSED_CASES_14
 as
@@ -1124,7 +1300,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -1137,7 +1316,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -1167,7 +1350,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -1177,6 +1363,9 @@ where rownumber = 1
 ;
 
 --Iteration 15
+
+refresh nathalie.tmp_fused_cases_14
+;
 
 create table NATHALIE.TMP_FUSED_CASES_15
 as
@@ -1201,7 +1390,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -1214,7 +1406,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -1244,7 +1440,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -1254,6 +1453,9 @@ where rownumber = 1
 ;
 
 --Iteration 16
+
+refresh nathalie.tmp_fused_cases_15
+;
 
 create table NATHALIE.TMP_FUSED_CASES_16
 as
@@ -1278,7 +1480,10 @@ from
                         when stay_interval < 2 then ss_dis_dt
                         else fs_dis_dt
                     end as dis_dt
-                , from_er, case_dx1, case_pr1, severity, aprdrg, dis_status, provider
+                , from_er
+                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
+                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
+                , severity, aprdrg, dis_status, provider
                 , case
                     when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
                     else fs_paid_amt_case
@@ -1291,7 +1496,11 @@ from
             from
             ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
                 select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er, FS.case_dx1, FS.case_pr1, FS.severity
+                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
+                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
+                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
+                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
+                    , FS.severity
                     , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
                     , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
                     -- Keep whichever is later: discharge date from FS or from SS. 
@@ -1321,7 +1530,10 @@ from
     (
         select *
         from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no, null as case_dx1, null as case_pr1
+            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
+                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
+                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
+                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
                 , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
                 , 99 as stay_interval, 1 as rownumber
         ) PADDING
@@ -1338,6 +1550,9 @@ If there are still more records reduced (being consolidated), then will need to 
 /*
 Save the last iteration. Add LOS. Omit rownumber cols and any remaining padding.
 */
+
+refresh nathalie.TMP_FUSED_CASES_16
+;
 
 drop table if exists nathalie.prjrea_step1_inpatient_cases
 ;
@@ -1388,3 +1603,4 @@ drop table if exists NATHALIE.TMP_FUSED_CASES_13;
 drop table if exists NATHALIE.TMP_FUSED_CASES_14;
 drop table if exists NATHALIE.TMP_FUSED_CASES_15;
 drop table if exists NATHALIE.TMP_FUSED_CASES_16;
+
