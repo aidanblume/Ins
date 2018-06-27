@@ -1567,7 +1567,35 @@ select
     , datediff(dis_dt, adm_dt) as LOS
     , from_er
     , case_dx1
+    , case_dx2
+    , case_dx3
+    , case_dx4
+    , case_dx5
+    , case_dx6
+    , case_dx7
+    , case_dx8
+    , case_dx9
+    , case_dx10
+    , case_dx11
+    , case_dx12
+    , case_dx13
+    , case_dx14
+    , case_dx15
+    , case_dx16
+    , case_dx17
+    , case_dx18
+    , case_dx19
+    , case_dx20
     , case_pr1
+    , case_pr2
+    , case_pr3
+    , case_pr4
+    , case_pr5
+    , case_pr6
+    , case_pr7
+    , case_pr8
+    , case_pr9
+    , case_pr10
     , severity
     , aprdrg
     , dis_status
