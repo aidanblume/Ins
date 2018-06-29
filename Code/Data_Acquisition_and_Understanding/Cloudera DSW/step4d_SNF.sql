@@ -87,6 +87,9 @@ nathalie.prjrea_step4d_SNF has most recent SNF. Contains 1 row per inpatient cas
 
 set max_row_size=7mb;
 
+drop table if exists prjrea_step4d_SNF
+;
+
 create table prjrea_step4d_SNF
 as
 select All_inp.*

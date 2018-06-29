@@ -18,11 +18,17 @@ create table nathalie.tmp as
 select * from nathalie.prjrea_step1_inpatient_cases
 ;
 
+refresh nathalie.tmp
+;
+
 insert into NATHALIE.tmp (adm_dt, dis_dt, rownumber)
 values('1900-01-01', '1900-01-01', 0)
 ; 
 
-drop table if exists NATHALIE.njb_labeled_as_readmits
+refresh nathalie.tmp
+;
+
+drop table if exists NATHALIE.tmp_base
 ;
 
 create table NATHALIE.tmp_base 
@@ -53,6 +59,8 @@ FROM
 ) AS S
 ;
 
+refresh nathalie.tmp_base
+;
 
 /*
 Compute "is_followed_by_a_30d_readmit" and "is_followed_by_a_90d_readmit".
@@ -64,8 +72,14 @@ drop table if exists NATHALIE.tmp2;
 create table NATHALIE.tmp2 as
 select * from NATHALIE.tmp_base;
 
+refresh nathalie.tmp2
+;
+
 insert into NATHALIE.tmp2 (adm_dt, dis_dt, rownumber)
 values('1900-01-01', '1900-01-01', 0);
+
+refresh nathalie.tmp2
+;
 
 --main computation
 drop table if exists NATHALIE.PRJREA_STEP2_READMIT_LABELS

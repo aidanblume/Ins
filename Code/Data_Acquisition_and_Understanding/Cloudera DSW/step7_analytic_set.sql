@@ -65,6 +65,49 @@ FROM NATHALIE.PRJREA_ANALYTIC_SET
 ;
 
 /*
+TABLEAU
+*/
+
+drop table if exists NATHALIE.PRJREA_TABLEAU_EXTRACT
+;
+
+CREATE TABLE NATHALIE.PRJREA_TABLEAU_EXTRACT
+STORED AS PARQUET
+AS
+SELECT 
+    concat('cin', cin_no, '_adm', cast(adm_dt as string)) as rowid
+    , los                  --LACE: LENGTH OF STAY
+    , from_er
+    , aprdrg
+    , product_code
+    , product_name
+    , segment
+    , provider
+    , 9 as provider_affiliated_members
+    , pcp
+    , site_no
+    , hospname
+    , ppg
+    , snf_90dback
+    , snf
+    , days_since_snf
+    , gender
+    , language_written_code
+    , ethnicity_code
+    , adm_age
+    , is_a_30d_readmit
+    , is_a_90d_readmit
+    , is_followed_by_a_30d_readmit
+    , is_followed_by_a_90d_readmit    
+    , 9 as median_30dreadm_los
+    , 9 as median_90dreadm_los
+FROM NATHALIE.PRJREA_ANALYTIC_SET
+where dies_before_discharge = 0
+--    , is_a_30d_death
+--    , is_followed_by_death_or_readmit
+;
+
+/*
 CLEAN UP
 */
 
