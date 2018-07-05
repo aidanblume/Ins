@@ -1,26 +1,18 @@
 ############################################################################################################
 ############################################################################################################
-##
 ##  Title:              It1_model.R
 ##  Description:        Trains several models and contrasts them to the LACE index. 
 ##  Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Modeling/Iteration1_vsLACE
 ##  Data Source:        path="hdfs://nameservice1/user/hive/warehouse/nathalie/njb_analytic_set_lace"  
-##  Output:             tk report names here
+##  Output:             tk report path here
 ##  Project:            Readmission
 ##  Authors:            Nathalie Blume, Qing Sun (Consultant)
-##  Last Touched:       May 23, 2018
-##
 ###########################################################################################################
 ###########################################################################################################
+
 
 
 set.seed(1234) #(TK SEED)
-
-  
-  
-
-
-  
 
 ## LOAD REQUIRED PACKAGES
 
