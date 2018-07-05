@@ -5,6 +5,13 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step3_lob_pcp 
                     encp.members
 Output:             nathalie.prjrea_step4a_demog
+
+        , row_number() over(partition by unique_cases.cin_no, UNIQUE_CASES.adm_dt, UNIQUE_CASES.dis_dt order by process_date desc) as rownumner3297
+
+select count(*) from nathalie.prjrea_step4a_demog
+
+
+select * from encp.members limit 10
 ***/
 
 drop table if exists nathalie.prjrea_step4a_demog;
@@ -67,7 +74,19 @@ from
                 when dob is null then null
                 else floor(datediff(trunc(adm_dt, 'month'), dob) / 365.25) 
             end as 1st_of_adm_mth_age 
-        from nathalie.prjrea_step3_lob_pcp as A left join encp.members as B on A.cin_no = B.cin_no
+        from nathalie.prjrea_step3_lob_pcp as A 
+        left join 
+        (
+            select *
+            from
+            (
+                select cin_no, gender, language_written_code, ethnicity_code, zip_code, zip4, phone, deathdate, dob
+                    , row_number() over(partition by cin_no order by dob, gender, zip_code, zip4, language_written_code, ethnicity_code, phone, deathdate) as rownumner1652
+                from encp.members 
+            ) as B1
+            where rownumner1652 = 1
+        ) B2
+        on A.cin_no = B2.cin_no
 ) as S
 --where dis_status not in ('20', '40', '41', '42') --member did not expire before discharge
 --and datediff(deathdate, dis_dt) >= 0 --member did not expire before discharge 

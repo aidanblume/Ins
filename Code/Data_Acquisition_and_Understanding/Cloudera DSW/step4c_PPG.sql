@@ -5,7 +5,7 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step4b_hospitals 
                     edwp.mem_prov_asgnmt_hist
 Output:             nathalie.prjrea_step4c_PPG to non-aggregated data set
-                    nathalie.prjrea_tblo_readmit_PPG for readmission rates by PPG
+                    -- nathalie.prjrea_tblo_readmit_PPG for readmission rates by PPG
 ***/
 
 /*
@@ -50,49 +50,49 @@ left join
 on A.case_id = B.case_id
 ;
 
-/* 
-EXCLUDE CASES
---Exclude CCI --> for more accurate report of readmission rates. Counts need to come from unfiltered data set. 
-*/
+-- /* 
+-- EXCLUDE CASES
+-- --Exclude CCI --> for more accurate report of readmission rates. Counts need to come from unfiltered data set. 
+-- */
 
-drop table if exists nathalie.tmp_no_cci
-;
+-- drop table if exists nathalie.tmp_no_cci
+-- ;
 
-create table nathalie.tmp_no_cci
-as
-select *
-from nathalie.prjrea_step4c_PPG 
-where segment != 'CCI'
-;
+-- create table nathalie.tmp_no_cci
+-- as
+-- select *
+-- from nathalie.prjrea_step4c_PPG 
+-- where segment != 'CCI'
+-- ;
 
 
-/*
-SUMMARIZE: PPG
-*/
+-- /*
+-- SUMMARIZE: PPG
+-- */
 
-drop table if exists nathalie.prjrea_tblo_readmit_PPG
-;
+-- drop table if exists nathalie.prjrea_tblo_readmit_PPG
+-- ;
 
-create table nathalie.prjrea_tblo_readmit_PPG
-as
-select A.ppg as ppg, admit_count, readmission_rate as no_cci_readmission_rate, admit_count * readmission_rate as calculated_readmit_count
-from 
-(   
-    select 
-        ppg
-        , count(*) as admit_count
-    from prjrea_step4c_PPG
-    group by ppg
-) as A
-left join
-( -- rates are derived without cci for accuracy. 
-    select 
-        ppg
-        , sum(is_a_30d_readmit) as number_readmits
-        , count(*) as number_all_admits
-        , round(sum(is_a_30d_readmit) / count(*), 2) as readmission_rate
-    from nathalie.tmp_no_cci
-    group by ppg
-) as B
-on A.ppg = B.ppg
-;
+-- create table nathalie.prjrea_tblo_readmit_PPG
+-- as
+-- select A.ppg as ppg, admit_count, readmission_rate as no_cci_readmission_rate, admit_count * readmission_rate as calculated_readmit_count
+-- from 
+-- (   
+--     select 
+--         ppg
+--         , count(*) as admit_count
+--     from prjrea_step4c_PPG
+--     group by ppg
+-- ) as A
+-- left join
+-- ( -- rates are derived without cci for accuracy. 
+--     select 
+--         ppg
+--         , sum(is_a_30d_readmit) as number_readmits
+--         , count(*) as number_all_admits
+--         , round(sum(is_a_30d_readmit) / count(*), 2) as readmission_rate
+--     from nathalie.tmp_no_cci
+--     group by ppg
+-- ) as B
+-- on A.ppg = B.ppg
+-- ;

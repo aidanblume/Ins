@@ -55,6 +55,10 @@ FROM
         	    when A.cin_no = B.cin_no  AND  DATEDIFF(B.adm_dt, A.dis_dt) >= 0 then A.case_id
         	    else null
         	end as prior_stay_case_id
+    	, case
+        	    when A.cin_no = B.cin_no  AND  DATEDIFF(B.adm_dt, A.dis_dt) >= 0 then A.LOS
+        	    else null
+        	end as prior_stay_LOS
     FROM NATHALIE.tmp AS A LEFT JOIN nathalie.prjrea_step1_inpatient_cases AS B ON A.rownumber = B.rownumber - 1 
 ) AS S
 ;
@@ -108,6 +112,10 @@ FROM
         	    when A.cin_no = B.cin_no then B.case_id
         	    else null
         	end as subsequent_stay_case_id
+    	, case
+        	    when A.cin_no = B.cin_no then B.LOS
+        	    else null
+        	end as subsequent_stay_LOS
     FROM NATHALIE.tmp2 AS A LEFT JOIN NATHALIE.tmp_base AS B ON A.rownumber = B.rownumber - 1 
 ) AS S
 ;

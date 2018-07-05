@@ -1549,6 +1549,7 @@ If there are still more records reduced (being consolidated), then will need to 
 
 /*
 Save the last iteration. Add LOS. Omit rownumber cols and any remaining padding.
+Create new case_id from cin_no and admit date. 
 */
 
 refresh nathalie.TMP_FUSED_CASES_16
@@ -1560,7 +1561,7 @@ drop table if exists nathalie.prjrea_step1_inpatient_cases
 create table nathalie.prjrea_step1_inpatient_cases
 as
 select 
-    case_id
+    concat(cin_no, cast(adm_dt as string)) as case_id
     , cin_no
     , adm_dt
     , dis_dt
@@ -1631,4 +1632,3 @@ drop table if exists NATHALIE.TMP_FUSED_CASES_13;
 drop table if exists NATHALIE.TMP_FUSED_CASES_14;
 drop table if exists NATHALIE.TMP_FUSED_CASES_15;
 drop table if exists NATHALIE.TMP_FUSED_CASES_16;
-
