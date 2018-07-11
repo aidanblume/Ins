@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS NATHALIE.PRJREA_ANALYTIC_SET;
 CREATE TABLE NATHALIE.PRJREA_ANALYTIC_SET 
 STORED AS PARQUET
 AS
-SELECT A.*, B3.SNF_admits_this_period
+SELECT A.*, B3.SNF_admits_this_period, C.ppg_members_this_period
 FROM
 (
     select
@@ -42,7 +42,7 @@ FROM
     FROM NATHALIE.prjrea_step6_lace_comorbidities 
     -- Select 24 months of records. Discharge date must be specified and must be 6 months old, which allows for a 90 day post index discharge and for claims to come through. 
     where adm_dt >= add_months(now(), -30)
-    and dis_dt >= add_months(now(), -6)
+    and dis_dt <= add_months(now(), -6)
     and dies_before_discharge = 0 
     --and segment != 'CCI'
     --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
@@ -57,17 +57,42 @@ LEFT JOIN
         (
             select snfname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, snf_admitsthismonth
             from NATHALIE.prjrea_step6_lace_comorbidities
-            where snfname is not null
-            and adm_dt >= add_months(now(), -30)
-            and dis_dt <= add_months(now(), -6)
+            where adm_dt >= add_months(now(), -30)
+            and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
+            -- and dis_dt <= add_months(now(), -6)
             and dies_before_discharge = 0 
             --and segment != 'CCI'
             --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
+            --and snfname is not null
         ) B1
     ) B2
     group by snfname
 ) B3
 ON A.snfname = B3.snfname
+LEFT JOIN
+(
+    select ppg, count(distinct ppg, cin_no) as ppg_members_this_period
+    from 
+    (
+        select A.ppg, B.carriermemid as cin_no, A.eff_dt, A.term_dt
+        from edwp.mem_prov_asgnmt_hist as A
+        left join 
+        plandata.enrollkeys as B
+        on A.MEM_BUS_KEY_NUM = B.memid
+        where substr(A.MEM_BUS_KEY_NUM, 1, 3) = 'MEM'
+        union 
+        select ppg, MEM_BUS_KEY_NUM, eff_dt, term_dt
+        from edwp.mem_prov_asgnmt_hist
+        where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
+    ) S1
+    -- where (term_dt is null OR term_dt >= add_months(now(), -30))
+    -- and eff_dt <= add_months(now(), -6)
+    where term_dt >= add_months(now(), -30)
+    and eff_dt <= add_months(now(), -6)
+    group by ppg
+    order by ppg_members_this_period desc
+) C
+ON A.ppg = C.ppg
 ;
 
 /*
@@ -119,8 +144,8 @@ SELECT
     , segment
     , hospname
     , ppg
-    , 9 as ppg_membersthismonth 
-    --SNF info is exported to Tableau in a different file. See step4d. 
+    , 9 as ppg_membersthismonth --tk improvement would be to get census on a monthly basis
+    , ppg_members_this_period
     , snfname
     , days_since_snf
     , snf_90dback
