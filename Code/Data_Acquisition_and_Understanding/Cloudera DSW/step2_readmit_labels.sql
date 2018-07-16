@@ -93,11 +93,11 @@ create table NATHALIE.PRJREA_STEP2_READMIT_LABELS as
 SELECT 
     *
     , case
-        when days_until_next_discharge <= 30 then 1 
+        when days_until_next_admit <= 30 then 1 
         else 0 
       end as is_followed_by_a_30d_readmit
     , case
-        when days_until_next_discharge <= 90 then 1 
+        when days_until_next_admit <= 90 then 1 
         else 0 
       end as is_followed_by_a_90d_readmit
 FROM
@@ -107,7 +107,7 @@ FROM
     	, CASE
         		WHEN A.cin_no = B.cin_no AND  DATEDIFF(B.adm_dt, A.dis_dt) >= 0 THEN DATEDIFF(B.adm_dt, A.dis_dt)
         		ELSE NULL
-    	    END AS days_until_next_discharge
+    	    END AS days_until_next_admit
     	, case
         	    when A.cin_no = B.cin_no then B.case_id
         	    else null

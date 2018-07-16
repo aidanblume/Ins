@@ -10,17 +10,20 @@ Output:             nathalie.prjrea_step5_ER
 drop table if exists nathalie.prjrea_step5_ER 
 ;
 
+set max_row_size = 20mb
+;
+
 create table nathalie.prjrea_step5_ER 
 as
 select a.*, b.count_prior6m_er
 from
-nathalie.prjrea_step4d_SNF a 
+nathalie.prjrea_step4e_postdischargeSNF a 
 left join
 (
     select a.cin_no, a.adm_dt
         , sum(case  when (datediff(a.adm_dt, er.er_adm_dt) <= 183 and datediff(a.adm_dt, er.er_adm_dt) >= 1)
                     then 1 else 0 end) as count_prior6m_er
-    from nathalie.prjrea_step4d_SNF a
+    from nathalie.prjrea_step4e_postdischargeSNF a
     left join 
     (
         select case_id, cin_no, er_adm_dt
