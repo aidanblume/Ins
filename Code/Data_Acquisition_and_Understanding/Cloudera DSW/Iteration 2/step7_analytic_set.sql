@@ -8,7 +8,7 @@ Output:             NATHALIE.PRJREA_analytic_set
 ***/
 
 /*
-FULL DATA SET
+FULL DATA SET  
 */
 
 DROP TABLE IF EXISTS NATHALIE.PRJREA_ANALYTIC_SET;
@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS NATHALIE.PRJREA_ANALYTIC_SET;
 CREATE TABLE NATHALIE.PRJREA_ANALYTIC_SET 
 STORED AS PARQUET
 AS
-SELECT A.*, B3.SNF_admits_this_period, C.ppg_members_this_period, D.lacare_members_this_period
+SELECT A.*, B3.SNF_admits_this_period, B6.postdischarge_SNF_admits_this_period, C.ppg_members_this_period, D.lacare_members_this_period
 FROM
 (
     select
@@ -32,7 +32,7 @@ FROM
         , moderateorsevereliverorrenaldisease, metastaticsolidtumor
         , prior_stay_case_id, prior_stay_los, days_since_prior_discharge, is_a_30d_readmit, is_a_90d_readmit
         , snfname, days_since_snf, snf_90dback, snf_14dback, snf_7dback, snf_3dback, snf_1dback, snf_admitsthismonth
-        , postdischarge_snfname, days_until_snf, snf_90dfwd, snf_14dfwd, snf_7dfwd, snf_3dfwd, snf_1dfwd, postdischarge_snf_admitsthismonth
+        , postdischarge_snfname, days_until_snf, snf_90dfwd, snf_14dfwd, snf_7dfwd, snf_3dfwd, snf_1dfwd, postdischarge_snf_admitsthismonth, uniquemember_SNF_admits_thisPeriod
         , count_prior6m_er, from_er
         , adm_dt, dis_dt, los, hospname, dis_status
         , days_until_next_admit, subsequent_stay_case_id, subsequent_stay_los, is_a_30d_death, is_followed_by_a_30d_readmit, is_followed_by_a_90d_readmit
