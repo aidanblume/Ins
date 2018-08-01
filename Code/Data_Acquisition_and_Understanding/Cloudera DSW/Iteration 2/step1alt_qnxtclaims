@@ -1,0 +1,305 @@
+/************************************************************************
+-- This code creates the SWAT claims universe
+-- Currently has:
+-- - QNXT claims:
+    -- - inpatient hospital claims
+    -- - outpatient hospital claims
+-- - LOBs: MCLA (CCI, MCE, TANF, SPD), CMC and LACC (LACC+LACCD combined)\
+-- - Data dictionary maintained here: https://dsghe.lacare.org/chlee/Analysis_SWAT/tree/master/Docs
+-- ************************************************************************/
+drop table if exists swat.claims_universe;
+create table swat.claims_universe stored as parquet
+-- create view swat.vw_claims_universe
+-- alter view swat.vw_claims_universe
+as
+select distinct c.claimid
+    , c.startdate
+    , c.enddate_corrected enddate
+    , c.paiddate
+    , ek.carriermemid
+    , mmb.dob
+    , round(datediff(to_date(concat_ws('-',cast(year(c.startdate) as string), lpad(cast(month(c.startdate) as string),2,'0'), '01')), mmb.dob)/365) age
+    , case when round(datediff(to_date(concat_ws('-',cast(year(c.startdate) as string), lpad(cast(month(c.startdate) as string),2,'0'), '01')), mmb.dob)/365) <19
+      then 'child' else 'adult' end as adult_ind
+    , c.totalpaid
+    , ii.sum_amountpaid
+    , ltc.totalpaid_ltc
+    , case when ltc.ltc_lines>0 then 1 else 0 end as ltc_flag
+    , case when ltc.ltc_rc_count>0 then 'yes' else 'no' end as ltc_claim
+    , case when ltc.snf_rc_count>0 then 'yes' else 'no' end as snf_claim
+    , case when ltc.suba_rc_count>0 then 'yes' else 'no' end as suba_claim
+    , case when ltc.otherltc_rc_count>0 then 'yes' else 'no' end as otherltc_claim
+    , case when adm.sv_admin is null then 0 else adm.sv_admin end as servunits_admin
+    , case when adm.tp_admin is null then 0 else adm.tp_admin end as totalpaid_admin 
+    , c.totextpaidamt totalpaid_cob
+    , ii.totalpaid_interest
+    , er.er_ind
+    , er.totalpaid_errevcode
+    , c.totalamt as totalbilled
+    , concat(c.facilitycode, c.billclasscode) billtype
+    , case when concat(c.facilitycode, c.billclasscode) in ('11','12') 
+                and substr(c.provid,1,1)='H' then 'IP-Hosp' --inpatient hospital
+           when concat(c.facilitycode, c.billclasscode) in ('11','12') 
+                and substr(c.provid,1,1)!='H' then 'IP-Other' --inpatient other
+           when concat(c.facilitycode, c.billclasscode) in ('13','14') 
+                and substr(c.provid,1,1)='H' then '0P-Hosp' --outpatient hospital
+           when concat(c.facilitycode, c.billclasscode) in ('13','14') 
+                and substr(c.provid,1,1)!='H' then '0P-Other' --outpatient other
+           when concat(c.facilitycode, c.billclasscode) in ('21','22') then 'SNF-IP' --skilled nursing inpatient
+           when concat(c.facilitycode, c.billclasscode) in ('23') then 'SNF-OP' --skilled nursing outpatient
+           when concat(c.facilitycode, c.billclasscode) in ('26') then 'SNF-Lvl2' --skilled nursing intermediate care level II
+           when concat(c.facilitycode, c.billclasscode) in ('24','25','27','28') then 'SNF-Other' --other skilled nursing: 24="Skilled Nursing - Other (Part B)", 25="Christian Science Hospital Based (Part B)", 27="Clinic or hospital based or independent renal dialysis facility", 28="Skill Nursing - swing bed"
+           end as billtype2
+    , gcs.segmtn as segment
+    , ek2.lob
+    , p.provid
+    , p.fullname as providname
+    , p.npi
+    -- , c.providertaxonomycode
+    , ipa.ppg
+    , ipa.ppg_name
+    , ipa.dhs_site
+    , diag.prindiag
+    , diag.drg
+    -- , diag.drgtype
+    , diag.drg_desc
+    , diag.drgweight
+    , diag.drgriskmortality
+    , diag.drgseverity
+    , diag.mcd_desc
+    , diag.icd10_chapter
+    , diag.icd10_chapdesc
+    , diag.icd10_categ
+    , diag.icd10_categdesc
+    , diag.poa_ind
+    , c.admittype
+    , case when admittype='1' then 'Emergency'
+           when admittype='2' then 'Urgent'
+           when admittype='3' then 'Elective'
+           when admittype='4' then 'Newborn'
+           when admittype='5' then 'Trauma'
+           when admittype='9' then 'Information Not Available'
+           when admittype='' then NULL
+           else 'Undefined'
+      end as admittype_desc
+    , c.admitsource
+    , case when admitsource='0' then 'Anomaly'
+           when admitsource='1' then 'Physician referral'
+           when admitsource='2' then 'Clinic referral'
+           when admitsource='3' then 'HMO referral'
+           when admitsource='4' then 'Transfer from hospital (different facility)'
+           when admitsource='5' then 'Transfer from SNF or IC'
+           when admitsource='6' then 'Transfer from another inpatient health care facility, not defined elsewhere'
+           when admitsource='7' then 'Transfer from ER of same facility'
+           when admitsource='8' then 'Court or law enforcement'
+           when admitsource='9' then 'Information not available'
+           when admitsource in ('a','A') then 'Reserved for national assignment'
+           when admitsource in ('b','B') then 'Transfer from another home health agency'
+           when admitsource in ('c','C') then 'Readmission to same home health agency'
+           when admitsource in ('d','D') then 'Transfer from hospital inpatient, same facility, separate claim'
+           when admitsource in ('e','E') then 'Transfer from ambulatory surgical center'
+           when admitsource in ('f','F') then 'Transfer from hospice, under hospice plan of care or enrolled in hospice program'
+           when admitsource='' then 'Undefined'
+           else NULL
+      end as admitsource_desc
+    , dis.dispos_desc discharge_status
+
+    /*** limit base claims to IP, OP, and Skilled nursing claims only ***/
+from ( select *
+            /***correct enddate for IP and SNF non-OP claims***/
+        , case when concat(facilitycode, billclasscode) in ('11','12','21','22','24','25','26','27','28') 
+                    and enddate < startdate then startdate
+               when concat(facilitycode, billclasscode) in ('11','12','21','22','24','25','26','27','28')
+                    and enddate > from_unixtime(unix_timestamp()) then startdate
+          else enddate end as enddate_corrected
+        , case when substr(provid,1,1)='H' and facilitycode='1' then 1 else 0
+          end as iph_oph_ind
+        , case when facilitycode='2' then 1 else 0
+          end as snfclaim_ind
+        from plandata.claim
+        where resubclaimid='' and totalpaid>0 and status='PAID'
+            and ( concat(facilitycode, billclasscode) in ('11','12','13','14')
+            or facilitycode='2' )
+            and formtype='UB04') c
+
+    /***diagnoses data***/
+join (
+       select
+          cd1.claimid
+        , case when cd3.poa = 'Y' then 'yes' else 'no' end as poa_ind
+        , cd1.prindiag
+        , cd2.drg
+        , cd2.drgtype
+        , dc.description drg_desc
+        , cd2.drgweight
+        , cd2.mcd_desc
+        , cd2.drgriskmortality
+        , cd2.drgseverity
+        , icd.*
+       from plandata.claimdetail cd1
+         join ( select
+                  claimid
+                , finaldrg drg
+                -- , case when groupertype='MSDRG' then 'DRG'
+                , case when groupertype='MSDRG' then 'APR'
+                       else groupertype end as drgtype
+                , drgweight
+                , majordiagcategorydesc mcd_desc
+                , riskofmortality drgriskmortality
+                , severityofillness drgseverity
+                from plandata.claimdrg
+               ) cd2 on cd1.claimid=cd2.claimid
+         join plandata.claimdiag cd3 on cd1.claimid=cd3.claimid
+         left join plandata.drgcode dc on cd2.drg=dc.codeid and cd2.drgtype=dc.drgtype
+         left join swat.icd10_info icd on substring(cd1.prindiag,1,3)=icd.icd10_categ
+         where cd1.claimline=1 and cd3.diagtype in ('1','Primary')
+
+) diag on c.claimid=diag.claimid
+
+    /***get 'disposition' field from UB04 - aka discharge status***/
+left join encp.mhc_dispositions dis on c.patientstatus=dis.dispos_id
+
+    /***LTC data, revcode classifications based on LTC billing guide and claims POD***/
+left join (
+    select d2.claimid
+         , round(sum(d2.tp),2) totalpaid_ltc
+         , sum(d2.ltc_count) ltc_lines
+         , sum(d2.rc_ltc) ltc_rc_count
+         , sum(d2.rc_snf) snf_rc_count
+         , sum(d2.rc_sa) suba_rc_count
+         , sum(d2.rc_otherltc) otherltc_rc_count
+    from ( select claimid
+           , case when lpad(revcode,4,'0') in ('0022','0160','0191','0192','0193','0194','0199','0184','0185','0889','0169','0119') then amountpaid
+             else 0 end as tp        
+           , case when lpad(revcode,4,'0') in ('0022','0160','0191','0192','0193','0194','0199','0184','0185','0889','0169','0119') then 1
+                  when `location` in ('13','31','32','33') then 1
+             else 0 end as ltc_count
+                /***LTC/custodial care***/
+           , case when lpad(revcode,4,'0')='0160' then 1
+             else 0 end as rc_ltc
+                /***Skilled nursing care levels 1-4***/
+           , case when lpad(revcode,4,'0') in 
+                  ('0022','0191','0192','0193','0194') then 1
+             else 0 end as rc_snf
+           , case when lpad(revcode,4,'0')='0199' then 1
+                /***Subacute level 4a and 4b***/
+             else 0 end as rc_sa
+                /***Special reimbursement provisions: bed hold, LOA, dialysis day, bariatric, isolation surcharge***/
+           , case when lpad(revcode,4,'0') in 
+                  ('0184','0185','0889','0119', '0169') then 1
+             else 0 end as rc_otherltc
+           from ( select cd7.*, concat(clm4.facilitycode, clm4.billclasscode) billtype
+                 from plandata.claimdetail cd7 
+                 join plandata.claim clm4 on cd7.claimid=clm4.claimid
+                 where cd7.claimid is not null
+                   and clm4.facilitycode='2') cdet) d2
+      group by d2.claimid
+) ltc on c.claimid=ltc.claimid
+
+    /***Admin days - revcodes 169, 190, and 199 billed on inpatient bill types (11X and 12X) to hospital providers***/
+left join (
+    select d3.claimid
+         , sum(d3.sv) sv_admin
+         , round(sum(d3.tp),2) tp_admin
+    from ( select cd.claimid
+           , case when lpad(cd.revcode,4,'0') in ('0169','0190','0199') then servunits
+             else 0 end as sv
+           , case when lpad(cd.revcode,4,'0') in ('0169','0190','0199') then amountpaid
+             else 0 end as tp
+          from plandata.claimdetail cd
+            inner join (
+                   select *
+                   from plandata.claim
+                   where concat(facilitycode,billclasscode) in ('11','12')
+                     and substr(provid,1,1)='H'
+                  ) clm2 on cd.claimid=clm2.claimid) d3
+      group by d3.claimid
+) adm on c.claimid=adm.claimid
+
+    /***totalpaid_interest and sum_amountpaid***/
+left join (
+    select d4.claimid
+         , round(sum(d4.tp),2) totalpaid_interest
+         , round(sum(d4.amountpaid),2) sum_amountpaid
+    from ( select
+            claimid
+          , amountpaid
+          , case when substr(servcode,1,2)='IN' or substr(revcode,1,2)='IN' or substr(lpad(revcode,4,'0'),1,4) like '0000%'
+                 then amountpaid + abs(paydiscount)
+            else abs(paydiscount) end as tp
+          from plandata.claimdetail where claimid is not null) d4
+      group by d4.claimid
+) ii on c.claimid=ii.claimid
+
+    /***ER data***/
+left join (
+    select d5.claimid
+         , case when sum(d5.ind)>0 then 'yes' else 'no' end as er_ind
+         , round(sum(d5.tp),2) totalpaid_errevcode
+    from ( select claimid
+           , case when lpad(revcode,4,'0') like '045%'
+                      or `location`='23'
+                  then 1 else 0 end as ind
+           , case when lpad(revcode,4,'0') like '045%' then amountpaid
+             else 0 end as tp
+          from plandata.claimdetail where claimid is not null) d5
+      group by d5.claimid
+) er on c.claimid=er.claimid
+
+    /***PPG data***/
+join (
+    select ppg1.*
+         , v.enty_prov_nm ppg_name
+         , case when ppg1.ppg in ('AVHC','BHC','CTHC','DHHC','ELHC','EMCH',
+            'ERCH','GPHC','HCHC','HDHS','HHHC','HUMC','HUMF','LACU',
+            'LBCH','LCC','LLAC','LPHC','MLKH','OVMC','OVMV','RLAC',
+            'SFHC','SGHC','SPHC','STR','THC','WIHC','WVCH') --sourced from PNM and Safety Net
+           then 'DHS-PPG' else 'Non-DHS PPG' end as dhs_site
+    from
+       ( select distinct mp.enrollid
+                  , regexp_replace(ap.ppg_fullname,
+                        '.*\\([A-z]+-|-.*\\)', '') ppg
+        from plandata.memberpcp mp
+        join plandata.enrollkeys ek3 on
+                  mp.enrollid=ek3.enrollid and mp.termdate=ek3.termdate
+        join
+            ( select aff.affiliationid pcpaffiliationid
+                   , aff.affiliateid
+                   , p1.provid ppg_provid
+                   , p1.fullname ppg_fullname
+              from plandata.affiliation aff
+              join plandata.provider p1 on aff.affiliateid=p1.provid ) ap
+          on mp.affiliationid=ap.pcpaffiliationid
+        where mp.pcptype='PCP' ) ppg1
+    join edwp.vw_ppg v on ppg1.ppg=v.prov_bus_key_num
+) ipa on c.enrollid=ipa.enrollid
+
+    /***get MCLA segment, NULL for CMC and LACC***/
+join plandata.enrollkeys ek on c.enrollid=ek.enrollid
+left join
+    ( select * from edwp.vw_grp_cd_segmtn
+        where lob='MCLA' and segmtn in ('CCI','MCE','TANF','SPD')) gcs
+    on gcs.grp_cd=ek.ratecode
+join plandata.member mmb on ek.memid=mmb.memid
+join plandata.provider p on c.provid = p.provid
+-- left join plandata.provspecialty ps on p.provid=ps.provid
+-- left join plandata.specialty s on ps.specialtycode=s.specialtycode
+
+    /*** get LOB ***/
+left join
+    ( select distinct
+        ek.enrollid,
+        case
+            when trim(eo.fullname)='COVERED CALIFORNIA' then 'LACC'
+            when trim(eo.fullname)='LA CARE COVERED DIRECT' then 'LACC'
+            when trim(eo.fullname)='CMC SPONSOR' then 'CMC'
+            else trim(eo.fullname)
+          end as lob
+        from plandata.enrollkeys ek
+        left join plandata.eligibilityorg eo on trim(eo.eligibleorgid) = ek.eligibleorgid ) ek2
+    on c.enrollid=ek2.enrollid
+where ek2.lob in ('MCLA','LACC','CMC')
+  and ek.carriermemid is not null and ek.carriermemid !=''
+ 
+ /***limit to IP-Hosp, OP-Hosp, and all skill nursing billtype claims***/
+  and (c.iph_oph_ind=1 or c.snfclaim_ind=1);
