@@ -14,9 +14,9 @@ FULL DATA SET
 DROP TABLE IF EXISTS NATHALIE.PRJREA_ANALYTIC_SET;
 
 CREATE TABLE NATHALIE.PRJREA_ANALYTIC_SET 
-STORED AS PARQUET
+-- STORED AS PARQUET
 AS
-SELECT A.*, B3.SNF_admits_this_period, B6.postdischarge_SNF_admits_this_period, C.ppg_members_this_period, D.lacare_members_this_period
+SELECT A.*, B3.SNFLTCSA_admits_this_period, C.ppg_members_this_period, D.lacare_members_this_period
 FROM
 (
     select
@@ -31,8 +31,10 @@ FROM
         , diabeteswithendorgandamage, chronicpulmonarydisease, mildliverorrenaldisease, anytumor, dementia, connectivetissuedisease, aids
         , moderateorsevereliverorrenaldisease, metastaticsolidtumor
         , prior_stay_case_id, prior_stay_los, days_since_prior_discharge, is_a_30d_readmit, is_a_90d_readmit
-        , snfname, days_since_snf, snf_90dback, snf_14dback, snf_7dback, snf_3dback, snf_1dback, snf_admitsthismonth
-        , postdischarge_snfname, days_until_snf, snf_90dfwd, snf_14dfwd, snf_7dfwd, snf_3dfwd, snf_1dfwd, postdischarge_snf_admitsthismonth, uniquemember_SNF_admits_thisPeriod
+        , preadmitsnfltcsaname, days_since_preadmitsnfltcsa, snfltcsa_90dback, snfltcsa_14dback,  snfltcsa_7dback, snfltcsa_3dback, snfltcsa_1dback, snfltcsa_admitsthismonth 
+        , postdischarge_snfltcsaname, days_until_snfltcsa, snfltcsa_90dfwd 
+        -- , snf_14dfwd, snf_7dfwd, snf_3dfwd, 21d??
+        , uniquemember_postdischargesnfltcsa_admitsthismonth, uniquemember_postdischargesnfltcsa_admitsthisperiod 
         , count_prior6m_er, from_er
         , adm_dt, dis_dt, los, hospname, dis_status
         , days_until_next_admit, subsequent_stay_case_id, subsequent_stay_los, is_a_30d_death, is_followed_by_a_30d_readmit, is_followed_by_a_90d_readmit
@@ -50,13 +52,13 @@ FROM
 ) A
 LEFT JOIN
 (
-    select snfname, sum(snf_admitsthismonth) as SNF_admits_this_period
+    select preadmitsnfltcsaname, sum(snfltcsa_admitsthismonth) as SNFLTCSA_admits_this_period
     from   
     (
-        select distinct snfname, yrmo, snf_admitsthismonth
+        select distinct preadmitsnfltcsaname, yrmo, snfltcsa_admitsthismonth
         from
         (
-            select snfname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, snf_admitsthismonth
+            select preadmitsnfltcsaname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, snfltcsa_admitsthismonth
             from NATHALIE.prjrea_step6_lace_comorbidities
             where adm_dt >= add_months(now(), -30)
             and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
@@ -64,38 +66,38 @@ LEFT JOIN
             and dies_before_discharge = 0 
             --and segment != 'CCI'
             --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
-            --and snfname is not null
+            --and preadmitsnfltcsaname is not null
         ) B1
     ) B2
-    group by snfname
+    group by preadmitsnfltcsaname
 ) B3
-ON A.snfname = B3.snfname
-LEFT JOIN
-(
-    select postdischarge_snfname, sum(postdischarge_snf_admitsthismonth) as postdischarge_SNF_admits_this_period
-    from   
-    (
-        select distinct postdischarge_snfname, yrmo, postdischarge_snf_admitsthismonth
-        from
-        (
-            select postdischarge_snfname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, postdischarge_snf_admitsthismonth
-            from NATHALIE.prjrea_step6_lace_comorbidities
-            where adm_dt >= add_months(now(), -30)
-            and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
-            -- and dis_dt <= add_months(now(), -6)
-            and dies_before_discharge = 0 
-            --and segment != 'CCI'
-            --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
-            --and postdischarge_snfname is not null
-        ) B4
-    ) B5
-    group by postdischarge_snfname
-) B6
-ON A.postdischarge_snfname = B6.postdischarge_snfname
+ON A.preadmitsnfltcsaname = B3.preadmitsnfltcsaname
+-- LEFT JOIN
+-- (
+--     select postdischarge_snfname, sum(postdischarge_snf_admitsthismonth) as postdischarge_SNF_admits_this_period
+--     from   
+--     (
+--         select distinct postdischarge_snfname, yrmo, postdischarge_snf_admitsthismonth
+--         from
+--         (
+--             select postdischarge_snfname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, postdischarge_snf_admitsthismonth
+--             from NATHALIE.prjrea_step6_lace_comorbidities
+--             where adm_dt >= add_months(now(), -30)
+--             and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
+--             -- and dis_dt <= add_months(now(), -6)
+--             and dies_before_discharge = 0 
+--             --and segment != 'CCI'
+--             --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
+--             --and postdischarge_snfname is not null
+--         ) B4
+--     ) B5
+--     group by postdischarge_snfname
+-- ) B6
+-- ON A.postdischarge_snfname = B6.postdischarge_snfname
 LEFT JOIN
 (
     select ppg
-        , count(distinct ppg, cin_no) as ppg_members_this_period
+        , count(distinct cin_no) as ppg_members_this_period
     from 
     (
         select A.ppg, B.carriermemid as cin_no, A.eff_dt, A.term_dt
@@ -149,7 +151,7 @@ drop table if exists NATHALIE.PRJREA_ANALYTIC_SET_LACE
 ;
 
 CREATE TABLE PRJREA_ANALYTIC_SET_LACE
-STORED AS PARQUET
+-- STORED AS PARQUET
 AS
 SELECT 
     case_id
