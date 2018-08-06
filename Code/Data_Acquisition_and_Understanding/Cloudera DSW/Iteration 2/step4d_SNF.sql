@@ -302,7 +302,8 @@ drop table if exists nathalie.tmp_traffic
 
 create table nathalie.tmp_traffic
 as
-select provider, fullname, yrmo, count(distinct cin_no) as admitCount
+-- select provider, fullname, yrmo, count(distinct cin_no) as admitCount
+select fullname, yrmo, count(distinct cin_no) as admitCount
 from   
 (
     select *
@@ -350,7 +351,8 @@ from
     ) X1
 ) X2
 where rn = 1
-group by provider, fullname, yrmo
+group by fullname, yrmo
+-- group by provider, fullname, yrmo
 ;
 
 -- ----old one below
