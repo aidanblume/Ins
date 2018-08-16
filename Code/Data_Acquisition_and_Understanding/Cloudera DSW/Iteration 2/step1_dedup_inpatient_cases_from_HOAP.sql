@@ -10,1604 +10,196 @@ Notes:              1. Inpatient cases are identified with 'where srv_cat = '01i
                     This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
                     2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
                     3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
-                    4. Some overlapping stays remain by Iteration 16. See, e.g. cin_no '93066483A' for whom stays are complex possibly because some SNFs have not been eliminated from capture. 
-                    5. For improvements: see email from Chee <Thu 6/21/2018 9:45 AM> advocating for non-HOAP use. 
 ***/
 
-/*
-UNIQUE_CASES
 
+/*
+UNIQUE_CASE_PIECES
 Purpose:    To merge data from HOA's 3 case tables with priority QNXT>CLM>ENC
 */
 
-create table NATHALIE.TMP_UNIQUE_CASES 
+drop table if exists NATHALIE.TMP_CASE_PIECES
+;
+
+create table NATHALIE.TMP_CASE_PIECES 
 as
 -- select only 1 with same (cin_no, admi_dt, dis_dt) tupple
 -- add row number by cin_no partition. Will be used at next setp. 
 select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2 
 from
-(
+( --add number rows inside partitions where each partition is a unique (cin_no, admi_dt, dis_dt) tupple
     select *
+    , row_number() over(partition by cin_no, adm_dt order by dis_dt desc, source_table asc, case_id desc) as rownumber
     from
-    ( --add number rows inside partitions where each partition is a unique (cin_no, admi_dt, dis_dt) tupple
-        select *
-        -- Departure from the original SAS script used for the ELM. Instead of:
-        -- , row_number() over(partition by cin_no, adm_dt, dis_dt order by source_table asc, case_id desc) as rownumber
-        --the following line is used:
-        , row_number() over(partition by cin_no, adm_dt order by dis_dt desc, source_table asc, case_id desc) as rownumber
-        --which uniques by cin_no and adm_dt, not dis_dt as well, and results in sources tables being prefered against the stated hierarchy
-        from
-        ( -- union of cases across 3 data tables: qnxt, clm, enc
-            select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-            , severity, aprdrg, dis_status, provider, paid_amt_case, from_er
-            , 1 as source_table
-            from hoap.QNXT_CASE_INPSNF as Q
-            where srv_cat = '01ip_a'
-            union
-            select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-            , severity, aprdrg, dis_status, provider, paid_amt_case, from_er
-            , 2 as source_table
-            from hoap.clm_case_inpsnf as C
-            where srv_cat = '01ip_a'
-            union
-            select case_id, adm_dt, dis_dt, cin_no
-            , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-            , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-            , severity, aprdrg, dis_status, provider, null as paid_amt_case, from_er
-            , 3 as source_table
-            from hoap.ENC_CASE_INPSNF as E
-            where srv_cat = '01ip_a'
-       ) AS ALL_CASES
-        order by cin_no, adm_dt, dis_dt
-    ) ALL_CASES_PARTITIONED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no 
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, 4 as source_table
-                , 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
+    ( -- union of cases across 3 data tables: qnxt, clm, enc
+        select claimid as case_id, startdate as adm_dt, enddate as dis_dt, carriermemid as cin_no
+            , discharge_status as dis_status, provid as provider, 1 as source_table
+        from swat.claims_universe
+        where substr(provid,1,1)='H'
+        and billtype2='IP-Hosp'
+        union
+        select case_id, adm_dt, dis_dt, cin_no, dis_status, provider
+        , 2 as source_table
+        from hoap.clm_case_inpsnf as C
+        where srv_cat = '01ip_a'
+        union
+        select case_id, adm_dt, dis_dt, cin_no, dis_status
+            -- ,   case 
+            --         when '00' then 'Still Under Care'
+            --         when '01' then 'Home'
+            --         when '02' then 'Other Hospital'
+            --         when '03' then 'Skilled Nursing Facility'
+            --         when '04' then 'ICF'
+            --         when '06' then 'Home Health'
+            --         when '07' then 'AMA'
+            --         when '14' then 'Hospice'
+            --         when '20' then 'Exp Hospital'
+            --         when '30' then 'Still In'
+            --         when '40' then 'Exp Home'
+            --         when '41' then 'Exp Hospital'
+            --         when '42' then 'Exp, Unk Place'
+            --         when '50' then 'Hospice'
+            --         when '51' then 'Hospice'
+            --         when '61' then 'Swing Bed'
+            --         when '62' then 'Rehab-Inpatient'
+            --         when '63' then 'Mdcare Ltc Hospital'
+            --         when '64' then 'Mdcare Ltc Facility'
+            --         when '65' then 'Psy Hospita'
+            --     end as dis_status
+        , provider
+        , 3 as source_table
+        from hoap.ENC_CASE_INPSNF as E
+        where srv_cat = '01ip_a'
+   ) AS PIECES
+) PIECES_PARTITIONED
 where rownumber =  1
 ;
 
-/*
-FUSE INITIAL STAY WITH TRANSFERS or 1d READMITS 
 
-Purpose:    To merge rows that concern contiguous stays (also to capture cases that overlap in time). Contiguiity = discharge and admit are at most 1 day apart. 
-Notes:      1. Awkward implementation because looping is not permitted in Impala environment (see https://stackoverflow.com/questions/49523380/write-a-while-loop-in-impala-sql)
-            Therefore as long as you need to fuse admits, you need to hard-code the repetition of the search-and-fuse script below. 
-            2. FS = "first stay" and SS = "second stay"
-            3. What is kept:
-                From FS in fusing contiguous stays: fromER, Dx1, Pr1, severity and aprdrg 
-                From SS in fusing contiguous stays: discharge date from 2nd stay, and max(dis_dt). 
-                What is concatenated (both FS and SS values are kept): case_id, source tables, provider. 
+/*
+tmp_completedatepairs
+--remove claims with missing startdate or enddate
+
+check how many drops: select count(*) from nathalie.TMP_CASE_PIECES where (adm_dt is null) or (dis_dt is null);
+
 */
 
--- Iteration 1
-
-refresh nathalie.TMP_UNIQUE_CASES
+drop table if exists nathalie.tmp_completedatepairs 
 ;
 
-create table NATHALIE.TMP_FUSED_CASES_1
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_UNIQUE_CASES as FS
-                inner join
-                NATHALIE.TMP_UNIQUE_CASES as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
+create table nathalie.tmp_completedatepairs 
+as 
+select A.* 
+from nathalie.TMP_CASE_PIECES as A
+left anti join (select cin_no from nathalie.TMP_CASE_PIECES where (adm_dt is null) or (dis_dt is null)) as B
+on A.cin_no=B.cin_no
 ;
 
 /*
-The next set of 'Iteration x' are identical to Iteration 1 excpet for the table names. If the logic of Iteration 1 is valid so is the logic of Iteration x. 
+tmp_respaned_input
+--create new pairs of start and end dates that are better time span tiles across the stay period
 */
 
--- Iteration 2
-
-refresh nathalie.TMP_FUSED_CASES_1
+drop table if exists nathalie.tmp_respaned_input
 ;
 
-create table NATHALIE.TMP_FUSED_CASES_2
+create table nathalie.tmp_respaned_input
 as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_1 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_1 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-    
--- Iteration 3
-
-refresh nathalie.TMP_FUSED_CASES_2
+select SD.cin_no, SD.adm_dt, ED.dis_dt
+from 
+(
+    select cin_no, adm_dt, row_number() OVER (PARTITION BY cin_no ORDER BY adm_dt asc) as rnsd
+    from nathalie.tmp_completedatepairs
+) as SD
+left join
+(
+    select cin_no, dis_dt, row_number() OVER (PARTITION BY cin_no ORDER BY dis_dt asc) as rned
+    from nathalie.tmp_completedatepairs
+) as ED
+on SD.cin_no=ED.cin_no and SD.rnsd=ED.rned
 ;
 
-create table NATHALIE.TMP_FUSED_CASES_3
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_2 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_2 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-   
--- Iteration 4
-
-refresh nathalie.TMP_FUSED_CASES_3
-;
-
-create table NATHALIE.TMP_FUSED_CASES_4
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_3 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_3 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 5
-
-refresh nathalie.TMP_FUSED_CASES_4
-;
-
-create table NATHALIE.TMP_FUSED_CASES_5
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_4 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_4 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 6
-
-refresh nathalie.TMP_FUSED_CASES_5
-;
-
-create table NATHALIE.TMP_FUSED_CASES_6
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_5 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_5 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
--- Iteration 7 
-
-refresh nathalie.TMP_FUSED_CASES_6
-;
-
-create table NATHALIE.TMP_FUSED_CASES_7
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_6 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_6 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
-
---Iteration 8
-
-refresh nathalie.TMP_FUSED_CASES_7
-;
-
-create table NATHALIE.TMP_FUSED_CASES_8
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_7 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_7 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
-
---Iteration 9
-
-refresh nathalie.TMP_FUSED_CASES_8
-;
-
-create table NATHALIE.TMP_FUSED_CASES_9
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_8 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_8 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 10
-
-refresh nathalie.TMP_FUSED_CASES_9
-;
-
-create table NATHALIE.TMP_FUSED_CASES_10
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_9 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_9 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 11
-
-refresh nathalie.TMP_FUSED_CASES_10
-;
-
-create table NATHALIE.TMP_FUSED_CASES_11
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_10 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_10 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 12
-
-refresh nathalie.TMP_FUSED_CASES_11
-;
-
-create table NATHALIE.TMP_FUSED_CASES_12
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_11 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_11 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 13
-
-refresh nathalie.TMP_FUSED_CASES_12
-;
-
-create table NATHALIE.TMP_FUSED_CASES_13
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_12 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_12 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 14
-
-refresh nathalie.tmp_fused_cases_13
-;
-
-create table NATHALIE.TMP_FUSED_CASES_14
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_13 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_13 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 15
-
-refresh nathalie.tmp_fused_cases_14
-;
-
-create table NATHALIE.TMP_FUSED_CASES_15
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_14 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_14 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
-
---Iteration 16
-
-refresh nathalie.tmp_fused_cases_15
-;
-
-create table NATHALIE.TMP_FUSED_CASES_16
-as
-select *
-    , row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber2
-from
-( --PADDING_ADDED
-    select *
-    from
-    ( -- ROWNUMER_ADDED // order newly engineered cases above cases that are transfers and whose admit date is later
-        select *
-            , row_number() over(partition by cin_no, dis_dt order by adm_dt asc) as rownumber 
-        from
-        ( -- VALS_UPDATED // use stay_interval to decide whether to replace some FS values with their SS analogs
-            select 
-                case 
-                    when stay_interval < 2 then ss_case_id
-                    else fs_case_id
-                end as case_id
-                , cin_no, adm_dt
-                ,   case
-                        when stay_interval < 2 then ss_dis_dt
-                        else fs_dis_dt
-                    end as dis_dt
-                , from_er
-                , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10, case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
-                , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
-                , severity, aprdrg, dis_status, provider
-                , case
-                    when (stay_interval < 2 and fs_case_id != ss_case_id) then fs_paid_amt_case + ss_paid_amt_case
-                    else fs_paid_amt_case
-                end as paid_amt_case
-                , case
-                    when stay_interval < 2 then concat(fs_source_table, ', ', ss_source_table)
-                    else fs_source_table
-                end as source_table
-                , stay_interval
-            from
-            ( --'INTERVAL_ADDED' // add interval between 1st discharge date and 2nd admit date to create subquery called 'interval_added'
-                select 
-                    FS.case_id as fs_case_id, FS.cin_no, FS.adm_dt, FS.dis_dt as fs_dis_dt, FS.from_er
-                    , FS.case_dx1, FS.case_dx2, FS.case_dx3, FS.case_dx4, FS.case_dx5, FS.case_dx6, FS.case_dx7, FS.case_dx8, FS.case_dx9, FS.case_dx10
-                    , FS.case_dx11, FS.case_dx12, FS.case_dx13, FS.case_dx14, FS.case_dx15, FS.case_dx16, FS.case_dx17, FS.case_dx18, FS.case_dx19, FS.case_dx20
-                    , FS.case_pr1, FS.case_pr2, FS.case_pr3, FS.case_pr4, FS.case_pr5, FS.case_pr6, FS.case_pr7, FS.case_pr8, FS.case_pr9, FS.case_pr10
-                    , FS.severity
-                    , FS.aprdrg, FS.dis_status, FS.provider, FS.paid_amt_case as fs_paid_amt_case, cast(FS.source_table as varchar(1)) as fs_source_table
-                    , concat(FS.case_id, ', ', SS.case_id) as ss_case_id
-                    -- Keep whichever is later: discharge date from FS or from SS. 
-                    , case
-                        when datediff(SS.dis_dt, FS.dis_dt) < 0
-                            then FS.dis_dt
-                            else SS.dis_dt
-                        end as ss_dis_dt
-                    , SS.dis_status as ss_dis_status, concat(FS.provider, ', ', SS.provider) as ss_provider, SS.paid_amt_case as ss_paid_amt_case --the paid values will be added at the next level of nesting
-                    , concat(cast(FS.source_table as varchar(1)), ', ', cast(SS.source_table as varchar(1))) as ss_source_table
-                    , case
-                        when FS.cin_no = SS.cin_no 
-                            then datediff(SS.adm_dt, FS.dis_dt)
-                            else null
-                        end as stay_interval
-                from
-                NATHALIE.TMP_FUSED_CASES_15 as FS
-                inner join
-                NATHALIE.TMP_FUSED_CASES_15 as SS
-                ON SS.rownumber2 = FS.rownumber2 + 1
-            ) AS INTERVAL_ADDED
-        ) AS VALS_UPDATED
-    ) AS ROWNUMER_ADDED
-    union
-    -- Adding a dummy row at the end of the file as padding for the next step. In the next step, the last row is sheared off
-    -- when the table is joined with itself with an offset of 1 row. 
-    (
-        select *
-        from (
-            select null as case_id, '1900-01-01' as adm_dt, '1900-01-01' as dis_dt, 'ZZZZZ' as cin_no
-                , null as case_dx1, null as case_dx2, null as case_dx3, null as case_dx4, null as case_dx5, null as case_dx6, null as case_dx7, null as case_dx8,null as  case_dx9, null as case_dx10
-                , null as case_dx11, null as case_dx12, null as case_dx13, null as case_dx14, null as case_dx15, null as case_dx16, null as case_dx17, null as case_dx18, null as case_dx19, null as case_dx20
-                , null as ase_pr1, null as case_pr2, null as case_pr3, null as case_pr4, null as case_pr5, null as case_pr6, null as case_pr7, null as case_pr8, null as case_pr9, null as case_pr10
-                , null as severity, null as aprdrg, null as dis_status, null as provider, null as paid_amt_case, null as from_er, '4' as source_table
-                , 99 as stay_interval, 1 as rownumber
-        ) PADDING
-    )
-) ALL_CASES_PADDED
-where rownumber = 1
-;
 
 /*
-End of "loop"
-If there are still more records reduced (being consolidated), then will need to run more iterations till no more reduction in total number of cases
+tmp_cases
+Purpose:    --find gaps >1day and define stays around them
 */
+
+drop table if exists nathalie.tmp_cases
+;
+
+create table nathalie.tmp_cases
+as
+select concat(cin_no, '_', to_date(adm_dt)) as case_id, cin_no, adm_dt, dis_dt
+from
+(
+    select cin_no, adm_dt, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) as string)) as rnlink
+    from
+    (
+        select L.cin_no, L.adm_dt as adm_dt, datediff(L.adm_dt, R.dis_dt) as d 
+        from 
+        (
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+        ) L   
+        left join
+        (
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+        ) R
+        on L.rnstart = R.rnstart
+    ) X
+    where d > 1 or d is null
+) S
+left join
+(
+    select dis_dt,  concat(cin_no, cast(row_number() over (partition by cin_no order by dis_dt asc) as string)) as rnlink
+    from
+    (
+        select L.cin_no, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
+        from 
+        (
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+        ) L   
+        left join
+        (
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+        ) R
+        on L.rnstart = R.rnstart
+    ) X
+    where d > 1 or d is null
+) E  
+on S.rnlink = E.rnlink
+;
+
 
 /*
-Save the last iteration. Add LOS. Omit rownumber cols and any remaining padding.
-Create new case_id from cin_no and admit date. 
-*/
 
-refresh nathalie.TMP_FUSED_CASES_16
-;
+--attach data to cases
+select * from nathalie.tmp_completedatepairs 
+
+*/
 
 drop table if exists nathalie.prjrea_step1_inpatient_cases
 ;
 
 create table nathalie.prjrea_step1_inpatient_cases
 as
-select 
-    concat(cin_no, cast(adm_dt as string)) as case_id
-    , cin_no
-    , adm_dt
-    , dis_dt
-    , datediff(dis_dt, adm_dt) as LOS
-    , from_er
-    , case_dx1
-    , case_dx2
-    , case_dx3
-    , case_dx4
-    , case_dx5
-    , case_dx6
-    , case_dx7
-    , case_dx8
-    , case_dx9
-    , case_dx10
-    , case_dx11
-    , case_dx12
-    , case_dx13
-    , case_dx14
-    , case_dx15
-    , case_dx16
-    , case_dx17
-    , case_dx18
-    , case_dx19
-    , case_dx20
-    , case_pr1
-    , case_pr2
-    , case_pr3
-    , case_pr4
-    , case_pr5
-    , case_pr6
-    , case_pr7
-    , case_pr8
-    , case_pr9
-    , case_pr10
-    , severity
-    , aprdrg
-    , dis_status
-    , provider
-    , paid_amt_case
-    , source_table
-    , stay_interval
-    , rownumber2 as rownumber
-    --omit one rownumber column; keep the one that helps compute readmission labels
-from NATHALIE.TMP_FUSED_CASES_16
-where source_table != '4' -- filter out any remaining padding
+select S.*, datediff(S.dis_dt, S.adm_dt) as LOS
+    , 'under revision' as case_dx1, 'under revision' as case_dx2, 'under revision' as case_dx3, 'under revision' as case_dx4, 'under revision' as case_dx5
+    , 'under revision' as case_dx6, 'under revision' as case_dx7, 'under revision' as case_dx8, 'under revision' as case_dx9, 'under revision' as case_dx10
+    , 'under revision' as case_dx11, 'under revision' as case_dx12, 'under revision' as case_dx13, 'under revision' as case_dx14, 'under revision' as case_dx15
+    , 'under revision' as case_dx16, 'under revision' as case_dx17, 'under revision' as case_dx18, 'under revision' as case_dx19, 'under revision' as case_dx20
+    , 'under revision' as case_pr1, 'under revision' as case_pr2, 'under revision' as case_pr3, 'under revision' as case_pr4, 'under revision' as case_pr5
+    , 'under revision' as case_pr6, 'under revision' as case_pr7, 'under revision' as case_pr8, 'under revision' as case_pr9, 'under revision' as case_pr10
+    , 'under revision' as severity, 'under revision' as aprdrg, 'under revision' as paid_amt_case, 'under revision' as from_er
+from
+( -- info from earliest claim or HOAP case
+        select Ca.case_id, Ca.cin_no, Ca.adm_dt, Ca.dis_dt, P.dis_status, P.provider, P.source_table
+        , row_number() over (partition by Ca.case_id order by to_date(P.adm_dt) desc, P.source_table asc) as rndesc
+        from nathalie.tmp_cases Ca 
+        left join nathalie.tmp_case_pieces P 
+        on Ca.cin_no=P.cin_no and P.adm_dt between Ca.adm_dt and Ca.dis_dt
+) S
+where S.rndesc = 1
 ;
 
 
@@ -1615,20 +207,4 @@ where source_table != '4' -- filter out any remaining padding
 CLEAN UP
 */
 
-drop table if exists NATHALIE.TMP_UNIQUE_CASES;
-drop table if exists NATHALIE.TMP_FUSED_CASES_1;
-drop table if exists NATHALIE.TMP_FUSED_CASES_2;
-drop table if exists NATHALIE.TMP_FUSED_CASES_3;
-drop table if exists NATHALIE.TMP_FUSED_CASES_4;
-drop table if exists NATHALIE.TMP_FUSED_CASES_5;
-drop table if exists NATHALIE.TMP_FUSED_CASES_6;
-drop table if exists NATHALIE.TMP_FUSED_CASES_7;
-drop table if exists NATHALIE.TMP_FUSED_CASES_8;
-drop table if exists NATHALIE.TMP_FUSED_CASES_9;
-drop table if exists NATHALIE.TMP_FUSED_CASES_10;
-drop table if exists NATHALIE.TMP_FUSED_CASES_11;
-drop table if exists NATHALIE.TMP_FUSED_CASES_12;
-drop table if exists NATHALIE.TMP_FUSED_CASES_13;
-drop table if exists NATHALIE.TMP_FUSED_CASES_14;
-drop table if exists NATHALIE.TMP_FUSED_CASES_15;
-drop table if exists NATHALIE.TMP_FUSED_CASES_16;
+DROP TABLE nathalie.tmp_case_pieces; DROP TABLE nathalie.tmp_cases; DROP TABLE nathalie.tmp_completedatepairs; DROP TABLE nathalie.tmp_respaned_input;

@@ -16,6 +16,32 @@ Issues:             In QNXT's provider table, the provid field matches many but 
                     The fact that there are SNFs indicates that I have a capture problem further upstream.
 ***/
 
+--Find all notes about changes in hospital provider id
+
+
+--***THIS STEP REQUIRES LOOKING AT THE OUTPUT AND ADJUSTING THE QUERY ACCORDINGLY**
+--Replace provider ids as instructed
+--Cannot use 'update' or 'alter' in Hue. Grr. 
+
+drop table if exists nathalie.tmp;
+
+create table nathalie.tmp
+as
+select *, provider as provider2 from nathalie.prjrea_step4a_demog where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854') or provider is null)
+union
+select *, 'H0000109' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0011079')
+union
+select *, 'A0004803' as provider2 from nathalie.prjrea_step4a_demog where provider in ('H0000553')
+union
+select *, 'H0000183' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0004000')
+union
+select *, 'H0000006' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0011293')
+union
+select *, null as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0012854')
+;
+
+---
+
 drop table if exists nathalie.prjrea_step4b_hospitals
 ;
 
@@ -25,58 +51,58 @@ set max_row_size = 7mb
 create table nathalie.prjrea_step4b_hospitals
 as
 select A.*, PROVNAME_REF.hospname
-from nathalie.prjrea_step4a_demog as A
+from nathalie.tmp as A
 left join
 (
     select distinct cin_no, adm_dt, dis_dt, fullname as hospname
     from
     (
-        select cin_no, adm_dt, dis_dt, provider, fullname, source, row_number() over(partition by cin_no, adm_dt, dis_dt order by source asc, provider desc, fullname asc) as rn
+        select cin_no, adm_dt, dis_dt, provider2, fullname, source, row_number() over(partition by cin_no, adm_dt, dis_dt order by source asc, provider2 desc, fullname asc) as rn
         from
         (
             --A provid match is prefered and is taken to be unique.
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, B.fullname, 1 as source
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, B.fullname, 1 as source
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.provid
+            on A.provider2 = B.provid
             where B.fullname is not null
             union
             --In the absence of a provid match, backup matches to fedid are used. However each fedid may be associated with several names in
             --the reference file. Below provtype is ranked so that a SNF name is attached to the data set where several names may have been 
             --associated to the same prov code in the reference file. 
             --Recall that: For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital.
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, B.fullname, 2 as source
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, B.fullname, 2 as source
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.fedid
+            on A.provider2 = B.fedid
             where B.provtype in ('88') --this is assigned a higher source value because you want to preserve SNF info as much as possible
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, B.fullname, 3 as source
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, B.fullname, 3 as source
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.fedid
+            on A.provider2 = B.fedid
             where B.provtype in ('16', '70')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, B.fullname, 4 as source
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, B.fullname, 4 as source
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.fedid
+            on A.provider2 = B.fedid
             where B.provtype in ('15', '46')
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, B.fullname, 5 as source -- there is some kind of match to a fullname
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, B.fullname, 5 as source -- there is some kind of match to a fullname
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.fedid
+            on A.provider2 = B.fedid
             where B.provtype not in ('88', '70', '16', '15', '46')
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider, A.provider as fullname, 6 as source -- there is no match to a fullname, but A.provider may not be null
-            from nathalie.prjrea_step4a_demog as A
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2, A.provider2 as fullname, 6 as source -- there is no match to a fullname, but A.provider may not be null
+            from nathalie.tmp as A
             left join plandata.provider as B
-            on A.provider = B.fedid
+            on A.provider2 = B.fedid
             where B.provtype not in ('88', '70', '16', '15', '46')
             and B.fullname is null
         ) S
@@ -91,6 +117,13 @@ and A.dis_dt = PROVNAME_REF.dis_dt
 
 set max_row_size = 1mb
 ;
+
+--select provider2, hospname, count(*) from nathalie.prjrea_step4b_hospitals where hospname like '%*VOID%' group by provider2, hospname;
+
+-- select hospname, count(*) from nathalie.prjrea_step4b_hospitals group by hospname order by count(*) desc
+
+-- select source_table, count(*) from nathalie.prjrea_step4b_hospitals where hospname is null group by source_table order by source_table
+
 
 -- /* 
 -- EXCLUDE CASES

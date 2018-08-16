@@ -14,18 +14,27 @@ Issues:             Alternative coding. An alternative method may be: VIA REFERR
                     select claimid, referralid, admitsource from plandata.claim where [claimid matches one in the case crosswalk table]; ATTACH SNF NAME TO DATA)
 ***/
 
+--
+
 drop table if exists nathalie.tmp_raw_input
 ;
 
 -- select all claims and encounters for SNF-Inpatient with revenue codes for subacute, snf and ltc
 create table nathalie.tmp_raw_input
 as
-select case_id, cin_no, adm_dt, dis_dt, provider, type_bill, rev_cd,
+select claimid as case_id, carriermemid as cin_no, startdate as adm_dt, enddate as dis_dt, provid as provider
+    , case when ltc_claim = 'yes' then 'ltc' when snf_claim = 'yes' then 'snf' when suba_claim = 'yes' then 'subacute' end as provider_type
+    , 1 as source
+from swat.claims_universe
+where (ltc_claim = 'yes' or snf_claim = 'yes' or suba_claim = 'yes')
+union
+select case_id, cin_no, adm_dt, dis_dt, provider, 
     case 
         when lpad(rev_cd, 4, '0') in ('0022', '0191', '0192', '0193', '0194') then 'snf'
         when lpad(rev_cd, 4, '0') = '0199' then 'subacute'
         when lpad(rev_cd, 4, '0') = '0160' then 'ltc'
     end as provider_type
+    , 2 as source
 from
 (
     select C.case_id, H.cin_no, adm_dt, dis_dt, H.provider, type_bill, rev_cd
@@ -51,6 +60,50 @@ from
 ) S
 where substr(type_bill, 1, 2) in ('21', '22')
 and lpad(rev_cd, 4, '0') in ('0022', '0160', '0191', '0192', '0193', '0194', '0199')
+
+union --Identify the LTACHs from a list provided by PNM 
+select case_id, cin_no, adm_dt, dis_dt, provider
+    , 'ltach' as provider_type
+    , 3 as source
+from 
+(
+    select distinct provid 
+    from plandata.provider 
+    where 
+        upper(fullname) like '%KINDRED HOSPITAL - BALDWIN PARK%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - LOS ANGELES%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - SAN GABRIEL%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - LA MIRADA%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - SOUTH BAY%' 
+        or upper(fullname) like '%BARLOW RESPIRATORY%' 
+        or upper(fullname) like '%PROMISE HOSP%SUBURBAN%'
+) X
+left join
+(
+    -- H0000203 has no nip and the fullname is essentially the same as fullname for H0000621 (Promise)
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    FROM hoap.qnxt_case_inpsnf as C
+    left join hoap.qnxt_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.qnxt_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+    union
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    from hoap.clm_case_inpsnf as C
+    left join hoap.clm_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.clm_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+    union
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    from hoap.ENC_CASE_INPSNF as C
+    left join hoap.enc_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.enc_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+) Y
+on X.provid=Y.provider 
+where provider is not null
 ;
 
 --remove claims with missing adm_dt or dis_dt
@@ -292,7 +345,6 @@ on A.cin_no = PROVNAME_REF.cin_no
 and A.adm_dt = PROVNAME_REF.adm_dt
 ;
 
-
 /*
 COMPUTE THE NUMBER OF ADMITS AT EACH SNF EACH MONTH (REGARDLESS OF INP)
 */
@@ -355,222 +407,6 @@ group by fullname, yrmo
 -- group by provider, fullname, yrmo
 ;
 
--- ----old one below
--- create table nathalie.tmp_traffic
--- as
--- select snfname, yrmo, count(distinct cin_no) as admitCount
--- from   
--- (
---     select *
---         , cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo
---         , row_number() over(partition by cin_no, adm_dt order by source asc) as rn
---     from   
---     (
---         select A.*, B.fullname as snfname, 1 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---         left join plandata.provider as B
---         on A.SNF = B.provid
---         where B.fullname is not null
---         union
---         select A.*, B.fullname as snfname, 2 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---         left join plandata.provider as B
---         on A.SNF = B.fedid
---         where B.provtype in ('88') 
---         and B.fullname is not null
---         union
---         select A.*, B.fullname as snfname, 3 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---         left join plandata.provider as B
---         on A.SNF = B.fedid
---         where B.provtype in ('16', '70')
---         and B.fullname is not null
---         union
---         select A.*, B.fullname as snfname, 4 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---         left join plandata.provider as B
---         on A.SNF = B.fedid
---         where B.provtype in ('15', '46')
---         and B.fullname is not null
---         union
---         select A.*, B.fullname as snfname, 5 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---         left join plandata.provider as B
---         on A.SNF = B.fedid
---         where B.provtype not in ('88', '70', '16', '15', '46')
---         and B.fullname is not null
---         --Below ensures that all SNF cases are kept, whether or not a name was found
---         union
---         select A.*, A.SNF as snfname, 6 as source
---         from 
---         (
---             select *
---             from
---             ( 
---                 select *
---                 , row_number() over(partition by cin_no, adm_dt order by source_table asc, SNF desc) as rownumber
---                 from
---                 ( -- union of cases across 3 data tables: qnxt, clm, enc
---                     select cin_no, adm_dt, provider as SNF
---                     , 1 as source_table
---                     from hoap.QNXT_CASE_INPSNF
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 2 as source_table
---                     from hoap.clm_case_inpsnf
---                     where srv_cat = '04snf'
---                     union
---                     select cin_no, adm_dt, provider as SNF
---                     , 3 as source_table
---                     from hoap.ENC_CASE_INPSNF
---                     where srv_cat = '04snf'
---               ) AS ALL_CASES
---                 order by cin_no, adm_dt
---             ) ALL_CASES_PARTITIONED
---             where rownumber =  1
---         ) A
---     ) X1
--- ) X2
--- where rn = 1
--- group by snfname, yrmo
--- ;
-
 /*
 ADD COUNT OF UNIQUE CIN_NO ADMITS AT SNF THAT MONTH
 */
@@ -611,6 +447,7 @@ create table prjrea_step4d_SNF
 as
 select A.*
     , B.preadmitsnfltcsaname 
+    , B.type_preadmitSNFLTCSA
     , B.days_since_preadmitsnfltcsa --recall that -1 means no snf
     , case 
             when B.tmpval = 1 then 1
@@ -640,7 +477,7 @@ left join
         , 1 as tmpval
     from 
     (
-        select cin_no, adm_dt, preadmitsnfltcsaname, days_since_preadmitsnfltcsa, snfltcsa_admitsthismonth, row_number() over(partition by cin_no, adm_dt order by days_since_preadmitsnfltcsa asc) as rn
+        select cin_no, adm_dt, preadmitsnfltcsaname, type_preadmitSNFLTCSA, days_since_preadmitsnfltcsa, snfltcsa_admitsthismonth, row_number() over(partition by cin_no, adm_dt order by days_since_preadmitsnfltcsa asc) as rn
         from nathalie.tmp3 
         where preadmitsnfltcsa_90dback = 1
     ) S
@@ -650,7 +487,14 @@ on A.cin_no = B.cin_no
 and A.adm_dt = B.adm_dt
 ;
 
+-- select preadmitsnfltcsaname, type_preadmitSNFLTCSA, count(*) from prjrea_step4d_SNF
+--  where preadmitsnfltcsaname like '%KINDRED%' or preadmitsnfltcsaname like '%Barlow%' or preadmitsnfltcsaname like '%Promise %'
+--  group by preadmitsnfltcsaname, type_preadmitSNFLTCSA
+
+
 set max_row_size=1mb; 
+
+-- select type_preadmitSNFLTCSA from prjrea_step4d_SNF
 
 /*
 GENERATE FILE FOR TABLEAU BY KEEPING EXTRA ROWS AND FILTERING OUT UNNECESSARY FIELDS
