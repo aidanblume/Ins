@@ -22,12 +22,21 @@ drop table if exists nathalie.tmp_raw_input
 -- select all claims and encounters for SNF-Inpatient with revenue codes for subacute, snf and ltc
 create table nathalie.tmp_raw_input
 as
-select case_id, cin_no, adm_dt, dis_dt, provider, type_bill, rev_cd,
+
+select claimid as case_id, carriermemid as cin_no, startdate as adm_dt, enddate as dis_dt, provid as provider
+    , case when ltc_claim = 'yes' then 'ltc' when snf_claim = 'yes' then 'snf' when suba_claim = 'yes' then 'subacute' end as provider_type
+    , 1 as source
+from swat.claims_universe
+where (ltc_claim = 'yes' or snf_claim = 'yes' or suba_claim = 'yes')
+union
+
+select case_id, cin_no, adm_dt, dis_dt, provider, 
     case 
         when lpad(rev_cd, 4, '0') in ('0022', '0191', '0192', '0193', '0194') then 'snf'
         when lpad(rev_cd, 4, '0') = '0199' then 'subacute'
         when lpad(rev_cd, 4, '0') = '0160' then 'ltc'
     end as provider_type
+    , 2 as source
 from
 (
     select C.case_id, H.cin_no, adm_dt, dis_dt, H.provider, type_bill, rev_cd
@@ -53,7 +62,52 @@ from
 ) S
 where substr(type_bill, 1, 2) in ('21', '22')
 and lpad(rev_cd, 4, '0') in ('0022', '0160', '0191', '0192', '0193', '0194', '0199')
+
+union --Identify the LTACHs from a list provided by PNM 
+select case_id, cin_no, adm_dt, dis_dt, provider
+    , 'ltach' as provider_type
+    , 3 as source
+from 
+(
+    select distinct provid 
+    from plandata.provider 
+    where 
+        upper(fullname) like '%KINDRED HOSPITAL - BALDWIN PARK%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - LOS ANGELES%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - SAN GABRIEL%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - LA MIRADA%' 
+        or upper(fullname) like '%KINDRED HOSPITAL - SOUTH BAY%' 
+        or upper(fullname) like '%BARLOW RESPIRATORY%' 
+        or upper(fullname) like '%PROMISE HOSP%SUBURBAN%'
+) X
+left join
+(
+    -- H0000203 has no nip and the fullname is essentially the same as fullname for H0000621 (Promise)
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    FROM hoap.qnxt_case_inpsnf as C
+    left join hoap.qnxt_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.qnxt_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+    union
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    from hoap.clm_case_inpsnf as C
+    left join hoap.clm_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.clm_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+    union
+    select C.case_id, H.cin_no, adm_dt, dis_dt, case when H.provider = 'H0000203' then 'H0000621' else H.provider end as provider, type_bill, rev_cd
+    from hoap.ENC_CASE_INPSNF as C
+    left join hoap.enc_hdr_inpsnf as H
+    on C.case_id = H.case_id
+    left join hoap.enc_detail_inpsnf as D
+    on H.cl_id = D.cl_id
+) Y
+on X.provid=Y.provider 
+where provider is not null
 ;
+
 
 
 --remove claims with missing adm_dt or dis_dt
@@ -474,27 +528,28 @@ create table prjrea_step4e_postdischargeSNF
 as
 select A.*
     , B.postdischarge_snfltcsaname
+    , B.type_postdischargeSNFLTCSA
     , B.days_until_snfltcsa --recall that -1 means no snf
     , case 
             when B.tmpval = 1 then 1
             else 0
         end as snfltcsa_90dfwd
-    -- , case 
-    --         when (B.days_until_SNF > -1 and B.days_until_SNF <= 1) then 1
-    --         else 0
-    --     end as snf_1dfwd
-    -- , case 
-    --         when (B.days_until_SNF > -1 and B.days_until_SNF <= 3) then 1
-    --         else 0
-    --     end as snf_3dfwd
-    -- , case 
-    --         when (B.days_until_SNF > -1 and B.days_until_SNF <= 7) then 1
-    --         else 0
-    --     end as snf_7dfwd
-    -- , case 
-    --         when (B.days_until_SNF > -1 and B.days_until_SNF <= 14) then 1
-    --         else 0
-    --     end as snf_14dfwd
+    , case 
+            when (B.days_until_snfltcsa > -1 and B.days_until_snfltcsa <= 1) then 1
+            else 0
+        end as snf_1dfwd
+    , case 
+            when (B.days_until_snfltcsa > -1 and B.days_until_snfltcsa <= 3) then 1
+            else 0
+        end as snf_3dfwd
+    , case 
+            when (B.days_until_snfltcsa > -1 and B.days_until_snfltcsa <= 7) then 1
+            else 0
+        end as snf_7dfwd
+    , case 
+            when (B.days_until_snfltcsa > -1 and B.days_until_snfltcsa <= 14) then 1
+            else 0
+        end as snf_14dfwd
     , B.uniquemember_postdischargesnfltcsa_admitsthismonth
     , B.uniquemember_postdischargesnfltcsa_admitsthisperiod
 from nathalie.prjrea_step4d_SNF as A
@@ -504,7 +559,7 @@ left join
         , 1 as tmpval
     from 
     (
-        select cin_no, adm_dt, postdischarge_snfltcsaname, days_until_snfltcsa, uniquemember_postdischargesnfltcsa_admitsthismonth, uniquemember_postdischargesnfltcsa_admitsthisperiod 
+        select cin_no, adm_dt, postdischarge_snfltcsaname, type_postdischargeSNFLTCSA, days_until_snfltcsa, uniquemember_postdischargesnfltcsa_admitsthismonth, uniquemember_postdischargesnfltcsa_admitsthisperiod 
         , row_number() over(partition by cin_no, adm_dt order by days_until_snfltcsa asc) as rn
         from nathalie.tmp4 
         where snfltcsa_90dfwd = 1

@@ -59,5 +59,3 @@ left join
 ) as B
 on A.case_id = B.case_id
 ;
-
--- select count(*) from prjrea_step4c_PPG where ppg ='XXXX'

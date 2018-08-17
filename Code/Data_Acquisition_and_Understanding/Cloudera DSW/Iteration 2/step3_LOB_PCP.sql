@@ -8,6 +8,7 @@ Data Source:        nathalie.PRJREA_STEP2_READMIT_LABELS
 Output:             NATHALIE.prjrea_step3_lob_pcp
 ***/
 
+
 -- ATTRIBUTES AT TIME OF ADMISSION: LOB (with name added), segment, pcp, site_no
 
 drop table if exists NATHALIE.prjrea_step3_lob_pcp
