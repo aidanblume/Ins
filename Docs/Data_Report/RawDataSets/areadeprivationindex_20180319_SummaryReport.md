@@ -1,6 +1,9 @@
 # Data Report
 
 ## General summary of the data
+
+UPDATE: 2013 US Area Deprivation data replace 2000 Area Deprivation data: source: https://www.neighborhoodatlas.medicine.wisc.edu/
+
 Area Deprivation scores are sourced from [https://www.hipxchange.org/ADI](https://www.hipxchange.org/ADI). The Area Deprivation Index dataset was built by researchers and clinicians in the [Health Innovation Program](https://hip.wisc.edu/) at the University of Wisconsin-Madison School of Medicine & Public Health, using the index developed by Gopal Singh, PhD, MS, MSc. The mission of the Health Innovation Program is to improve health care delivery and population health across the State of Wisconsin and the nation through conducting and disseminating health services research that partners UW faculty with Wisconsin healthcare organizations.
 
 The area deprivation index represents a geographic area-based measure of the socioeconomic deprivation experienced by a neighborhood.  Higher index values represent higher levels of deprivation. Higher levels of deprivation have been associated with an increased risk of adverse health and health care outcomes. The original index developed by Gopal Singh, PhD, MS, MSc used 17 different markers of socioeconomic status from the 1990 Census data. HIP has generated an updated index using 2000 census block group-level data and the original Singh coefficients from the 1990 data.  The index includes the following variables:
