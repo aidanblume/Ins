@@ -23,7 +23,13 @@ FROM
     select
         concat(cin_no, cast(adm_dt as string)) as case_id
         , cin_no, adm_age, agegp_cty, agegp_hedis, agegp_lob_rollup, gender, language_written_code, ethnicity_code, zip_code, zip4, has_phone
-        , product_name, segment, ppg, pcp, site_no
+        -- , product_name
+        , segment
+        , lob
+        , ppg
+        , ppg_name
+        -- , pcp
+        -- , site_no
         , case_dx1, case_dx2, case_dx3, case_dx4, case_dx5, case_dx6, case_dx7, case_dx8, case_dx9, case_dx10
         , case_dx11, case_dx12, case_dx13, case_dx14, case_dx15, case_dx16, case_dx17, case_dx18, case_dx19, case_dx20
         , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10

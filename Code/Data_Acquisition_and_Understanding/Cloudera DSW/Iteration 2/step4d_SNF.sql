@@ -496,37 +496,6 @@ set max_row_size=1mb;
 
 -- select type_preadmitSNFLTCSA from prjrea_step4d_SNF
 
-/*
-GENERATE FILE FOR TABLEAU BY KEEPING EXTRA ROWS AND FILTERING OUT UNNECESSARY FIELDS
-
-nathalie.prjrea_tblo_readmit_SNF has several rows per inpatient case when the inpatient case was preceded by several valid SNF admits. 
-
-Not all fields are required
-
-[Note that unlike other tables meant for Tableau, here: Aggregate tables showing rate by SNF for period of N days preceding readmission are computed on the fly in Tableau rather than here]
-
-
-
--- moot because in temp, only most recent SNF stay is kept.
--- worth doing eventually because some SNFs may play hot potato, transfering members they know are headed toward admission to other SNFs. 
--- but at the moment the tableau dashboard would become complex. Need to bring up as part of design planning.
-
-*/
-
--- drop table if exists nathalie.prjrea_tblo_readmit_SNF
--- ;
-
--- create table nathalie.prjrea_tblo_readmit_SNF
--- as
--- select 
---     case_id, cin_no, adm_dt, dis_dt
---     , SNFname, SNF_admitsthismonth, days_since_SNF, adm_dt_SNF, dis_dt_SNF
---     , is_a_30d_death, is_a_30d_readmit, is_a_90d_readmit
---     , product_code, product_name, segment
--- from nathalie.tmp3
--- where snf_90dback = 1 -- not necessary but emphasizes that only admits preceded by a SNF since last discharge or within 90 days of admit are included
--- and dies_before_discharge = 0
--- ;
 
 /*
 CLEAN UP

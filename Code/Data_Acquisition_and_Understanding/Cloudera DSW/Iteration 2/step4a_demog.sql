@@ -2,7 +2,7 @@
 Title:              step4a_demog
 Description:        Add demographic data about the member. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step3_lob_pcp 
+Data Source:        nathalie.prjrea_step3_ppg_lob_pcp 
                     encp.members
 Output:             nathalie.prjrea_step4a_demog
 
@@ -74,7 +74,7 @@ from
                 when dob is null then null
                 else floor(datediff(trunc(adm_dt, 'month'), dob) / 365.25) 
             end as 1st_of_adm_mth_age 
-        from nathalie.prjrea_step3_lob_pcp as A 
+        from nathalie.prjrea_step3_ppg_lob_pcp as A 
         left join 
         (
             select *
