@@ -1,0 +1,150 @@
+/***
+Title:              step3_PPG_LOB_PCP
+Description:        Add PPG, Product, Segment, PCP assignment at time of admit 
+Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
+Data Source:        nathalie.prjrea_step2_readmit_labels
+                    HOAP.memmo
+                    prjrea_step3_ppg_lob_pcp
+Output:             nathalie.prjrea_step3b_PPG_LOB_PCP_fromHOAP
+Notes:              Can be improved by bringing in pcp info. Search below for /*TK HERE YOU HAVE OPPORTUNITY TO BRING IN PCP
+***/
+
+-- add more LOB info from HOAP
+
+drop table if exists nathalie.tmp;
+
+set max_row_size = 37mb
+;
+
+create table nathalie.tmp
+as
+select *
+from 
+(
+    select --distinct
+        UNIQUE_CASES.*
+        , MEMMO.pcp as tmp2_pcp
+        , MEMMO.site_no 
+        , MEMMO.product_code
+        , LOB.output as product_name
+        , MEMMO.segment as tmp2_segment
+        , row_number() over(partition by unique_cases.cin_no, UNIQUE_CASES.adm_dt, UNIQUE_CASES.dis_dt order by process_date desc) as rownumner3297
+    from
+    (
+        select *, concat(cast(date_part('year', adm_dt) as varchar(4)), lpad(cast(date_part('month', adm_dt) as varchar(4)), 2, '0')) as adm_yearmth
+        from
+        nathalie.PRJREA_STEP2_READMIT_LABELS 
+        where case_id is not null --drops rows of padding from previous step
+    ) UNIQUE_CASES 
+    left join
+    (
+        select *
+        from HOAP.memmo
+    ) as MEMMO
+    on UNIQUE_CASES.cin_no = MEMMO.cin_no
+    and UNIQUE_CASES.adm_yearmth = MEMMO.yearmth
+    left join 
+    nathalie.ref_lob as LOB
+    on MEMMO.product_code = LOB.input
+) S
+where rownumner3297 = 1
+;
+
+
+drop table if exists nathalie.tmp2
+;
+
+create table nathalie.tmp2
+as
+select 
+    A.*
+    , B.PPG, B.tmp_ppg_name, B.PPG_EFF_DT, B.PPG_TERM_DT
+from NATHALIE.PRJREA_STEP2_READMIT_LABELS as A
+left join 
+(
+    select *
+    from 
+    (
+        select IP.*
+            , PPG.EFF_DT as PPG_EFF_DT
+            , PPG.TERM_DT as PPG_TERM_DT
+            , PPG.PPG as PPG
+            , case  
+                when PPG_NAME.tmp_ppg_name is not null then PPG_NAME.tmp_ppg_name 
+                else PPG.PPG
+                end as tmp_ppg_name
+            , row_number() over(partition by case_id order by PPG.EFF_DT desc) as rownumber2
+        from NATHALIE.PRJREA_STEP2_READMIT_LABELS as IP
+        left join 
+        ( --Bring in PPG assignments
+            select distinct ppg, cin_no, eff_dt, term_dt
+            from 
+            (
+            	select A.ppg, B.carriermemid as cin_no, A.eff_dt, A.term_dt
+            	from edwp.mem_prov_asgnmt_hist as A
+            	left join 
+            	plandata.enrollkeys as B
+            	on A.MEM_BUS_KEY_NUM = B.memid
+            	where substr(A.MEM_BUS_KEY_NUM, 1, 3) = 'MEM'
+            	union 
+            	select ppg, MEM_BUS_KEY_NUM, eff_dt, term_dt
+            	from edwp.mem_prov_asgnmt_hist
+            	where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
+            ) as PPG_S
+	    ) as PPG
+        on IP.cin_no = PPG.cin_no
+        left join
+        (
+            select distinct tmp_ppg, tmp_ppg_name from nathalie.prjrea_step3_ppg_lob_pcp 
+        ) as PPG_NAME
+        on PPG.ppg=ppg_name.tmp_ppg
+        where IP.adm_dt >= PPG.EFF_DT 
+        and (IP.adm_dt < PPG.TERM_DT or PPG.TERM_DT is null)
+    ) S
+    where rownumber2 = 1
+) as B
+on A.case_id = B.case_id
+;
+
+--Bring it all together
+
+drop table if exists prjrea_step3b_PPG_LOB_PCP_fromHOAP
+;
+
+create table nathalie.prjrea_step3b_PPG_LOB_PCP_fromHOAP
+as
+select A.*
+    , case 
+        when A.tmp_segment is not null then A.tmp_segment
+        when A.tmp_segment is null and B.tmp2_segment is not null then B.tmp2_segment
+        else null
+    end as segment
+    , case 
+        when B.product_name is not null then B.product_name
+        when (B.product_name is null and A.tmp_lob in ('Healthy Family Plan', 'PASC-SEIU', 'MCLA', 'Healthy Kids', 'Other', 'Dual Eligible Special Needs Plan')) then A.tmp_lob
+        when (B.product_name is null and A.tmp_lob in ('MCLA-MCE', 'MCLA-CCI', 'MCLA-TANF', 'MCLA-SPD')) then 'MCLA'
+        when (B.product_name is null and A.tmp_lob='Cal-Medi Connect (CMC)') then 'CMC'
+        when (B.product_name is null and A.tmp_lob='LA Care Covered/Health Benefits Exchange') then 'LACC'
+        else null
+    end as product_name   
+    , case 
+        when A.tmp_ppg is not null then A.tmp_ppg
+        else C.ppg
+    end as ppg
+    , case  
+        when A.tmp_ppg_name is not null then A.tmp_ppg_name
+        when (A.tmp_ppg_name is null and C.tmp_ppg_name is not null) then C.tmp_ppg_name
+        when (A.tmp_ppg_name is null and C.tmp_ppg_name is null and A.tmp_ppg is null) then C.ppg
+        else A.tmp_ppg
+    end as ppg_name
+from prjrea_step3_ppg_lob_pcp A
+left join nathalie.tmp B
+on A.case_id=B.case_id
+left join nathalie.tmp2 C
+on A.case_id=C.case_id
+;
+
+-- CLEAN UP
+
+drop table if exists tmp;
+drop table if exists tmp2;
