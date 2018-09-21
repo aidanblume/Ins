@@ -1,0 +1,389 @@
+/***
+Title:              step1_dedup_inpatient_cases_from_HOAP
+Description:        Make a case_diagnosis relationship table with key field case ID and second field the diagnosis. 
+Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
+Data Source:        HOAP.HOA QNXT, CLM and ENC case tables. 
+Output:             NATHALIE.prjrea_case_diag
+                    NATHALIE.prjrea_step1b_diagnoses 
+Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
+                    This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
+                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
+                    3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
+***/
+
+
+------------------------------------------------------------------------------ CREATE A DETAILED CASE_DIAG RELATIONSHIP TABLE ---------------------------------------------------------------------------------------
+
+
+/*
+nathalie.tmp_case_diag
+Purpose:    Create a relationship table that links diagnoses to the cases defined in step 1. 
+            To do this, apply the same logic as in step1a to gather claims from all sources. Twist: build a table whose diag, diagtype and diag_dt fields reflect in vertical form the information 
+            represented horizontally in the source tables through fields dx1 through dx20. 
+            Then create the relationship table. Make sure that each row is unique (there's a deduping step to avoid representing a case:diag row multiple times)
+*/
+
+drop table if exists nathalie.tmp_case_diag
+;
+
+create table nathalie.tmp_case_diag 
+as 
+select distinct C.case_id , CD.diag, CD.diagtype, CD.diag_dt
+from NATHALIE.prjrea_step1a_inpatient_cases as C
+left join 
+( 
+    -- union of cases across 4 data tables: swat.claims_universe and in HOAP, qnxt, clm, enc
+    select distinct cin_no, adm_dt, diag, diagtype, diag_dt
+    from
+    (
+        select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, CD.codeid as diag, CD.diagtype, CD.createdate as diag_dt
+        from swat.claims_universe as C
+        left join plandata.claimdiag as CD
+        on C.claimid=CD.claimid
+        where substr(C.provid,1,1)='H'
+        and C.billtype2='IP-Hosp'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx1 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx2 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx3 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx4 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx5 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx6 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx7 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx8 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx9 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx10 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx11 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx12 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx13 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx14 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx15 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx16 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx17 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx18 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx19 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx20 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx1 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx2 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx3 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx4 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx5 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx6 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx7 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx8 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx9 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx10 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx11 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx12 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx13 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx14 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx15 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx16 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx17 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx18 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx19 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_dx20 as diag, 'under review' as diagtype, null as diag_dt
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+    ) S
+) as CD
+on C.cin_no=CD.cin_no
+where CD.adm_dt>=C.adm_dt and CD.adm_dt<=C.dis_dt
+;
+
+
+
+
+/*
+ENGINEER LACE COMORBIDITIES
+*/
+
+-- --HACK BROKEN TABLE
+
+-- drop table if exists nathalie.icd10_lacecomorbidity_crosswalk;
+
+-- create table nathalie.icd10_lacecomorbidity_crosswalk
+-- as
+-- select split_part(comorbid_lace, '', 1) as comorbid_lace, split_part(comorbid_lace, '', 2) as code 
+-- from flatfile.icd10_lacecomorbidity_crosswalk
+-- ;
+
+--RETOOL
+
+drop table if exists nathalie.prjrea_case_diag
+;
+
+create table nathalie.prjrea_case_diag 
+as
+select A.*, B.comorbid_lace
+from nathalie.tmp_case_diag  as A
+join nathalie.icd10_lacecomorbidity_crosswalk as B
+on A.diag=B.code
+;
+
+
+
+/*
+ENGINEER HEDIS DIAGNOSTIC CATEGORIES
+*/
+
+
+
+
+
+
+------------------------------------------------------------------------------ ATTACH KEY FIELDS TO ANALYTIC SET ---------------------------------------------------------------------------------------
+
+/*
+--Attach all  diagnoses to analytif file. 
+*/
+--> done with relationship table & later & in R
+
+
+/*
+-- Attach PRIMARY DIAGNOSIS to analytic file.
+*/
+
+drop table if exists nathalie.tmp_primarydx
+;
+
+create table nathalie.tmp_primarydx  
+as
+select Ca.*, P.diag as Primary_dx
+from NATHALIE.prjrea_step1a_inpatient_cases as Ca
+left join
+(
+    select *, row_number() over (partition by case_id order by priority asc, diag_dt desc, diag asc) as rn
+    from
+    (
+    select  case_id
+        ,   diag
+        ,   diag_dt
+        ,   case 
+                when diagtype='Primary' then 1
+                when diagtype='Admit' then 2
+                when diagtype='Trauma' then 3
+                when diagtype='PRV' then 4
+                when diagtype is null then 5
+                when diagtype='Secondary' then 6
+                else 7
+            end as priority
+    from nathalie.tmp_case_diag 
+    ) S
+) P
+on Ca.case_id=P.case_id
+where P.rn = 1 or P.rn is null
+;
+
+
+
+/*
+-- Attach LACE COMORBIDITIES to analytic file.
+*/
+
+--pivot comorbid_lace into 16 LACE fields
+
+drop table if exists nathalie.tmp_lace
+;
+
+create table nathalie.tmp_lace 
+as
+select Ca.*
+        , isnull(S2.PreviousMyocardialInfarction, 0) as PreviousMyocardialInfarction
+        , isnull(S2.CerebrovascularDisease, 0) as CerebrovascularDisease
+        , isnull(S2.PeripheralVascularDisease, 0) as PeripheralVascularDisease
+        , isnull(S2.DiabetesWithoutComplications, 0) as DiabetesWithoutComplications
+        , isnull(S2.CongestiveHeartFailure, 0) as CongestiveHeartFailure
+        , isnull(S2.DiabetesWithEndOrganDamage, 0) as DiabetesWithEndOrganDamage
+        , isnull(S2.ChronicPulmonaryDisease, 0) as ChronicPulmonaryDisease
+        , isnull(S2.MildLiverOrRenalDisease, 0) as MildLiverOrRenalDisease
+        , isnull(S2.AnyTumor, 0) as AnyTumor
+        , isnull(S2.Dementia, 0) as Dementia
+        , isnull(S2.ConnectiveTissueDisease, 0) as ConnectiveTissueDisease
+        , isnull(S2.AIDS, 0) as AIDS
+        , isnull(S2.ModerateOrSevereLiverOrRenalDisease, 0) as ModerateOrSevereLiverOrRenalDisease
+        , isnull(S2.MetastaticSolidTumor, 0) as MetastaticSolidTumor
+from nathalie.tmp_primarydx as Ca
+left join 
+(
+    select case_id
+        , max(PreviousMyocardialInfarction) as PreviousMyocardialInfarction
+        , max(CerebrovascularDisease) as CerebrovascularDisease
+        , max(PeripheralVascularDisease) as PeripheralVascularDisease
+        , max(DiabetesWithoutComplications) as DiabetesWithoutComplications
+        , max(CongestiveHeartFailure) as CongestiveHeartFailure
+        , max(DiabetesWithEndOrganDamage) as DiabetesWithEndOrganDamage
+        , max(ChronicPulmonaryDisease) as ChronicPulmonaryDisease
+        , max(MildLiverOrRenalDisease) as MildLiverOrRenalDisease
+        , max(AnyTumor) as AnyTumor
+        , max(Dementia) as Dementia
+        , max(ConnectiveTissueDisease) as ConnectiveTissueDisease
+        , max(AIDS) as AIDS
+        , max(ModerateOrSevereLiverOrRenalDisease) as ModerateOrSevereLiverOrRenalDisease
+        , max(MetastaticSolidTumor) as MetastaticSolidTumor
+    from 
+    (
+        select case_id
+            , case when comorbid_lace in ('Previous myocardial infarction') then 1 else 0 end as PreviousMyocardialInfarction
+            , case when comorbid_lace in ('Cerebrovascular disease') then 1 else 0 end as CerebrovascularDisease
+            , case when comorbid_lace in ('Peripheral vascular disease') then 1 else 0 end as PeripheralVascularDisease
+            , case when comorbid_lace in ('Diabetes without complications') then 1 else 0 end as DiabetesWithoutComplications
+            , case when comorbid_lace in ('Congestive heart failure') then 1 else 0 end as CongestiveHeartFailure
+            , case when comorbid_lace in ('Diabetes with end organ damage') then 1 else 0 end as DiabetesWithEndOrganDamage
+            , case when comorbid_lace in ('Chronic pulmonary disease') then 1 else 0 end as ChronicPulmonaryDisease
+            , case when comorbid_lace in ('Mild liver or renal disease') then 1 else 0 end as MildLiverOrRenalDisease
+            , case when comorbid_lace in ('Any tumor (including lymphoma or leukemia)') then 1 else 0 end as AnyTumor
+            , case when comorbid_lace in ('Dementia') then 1 else 0 end as Dementia
+            , case when comorbid_lace in ('Connective tissue disease') then 1 else 0 end as ConnectiveTissueDisease
+            , case when comorbid_lace in ('AIDS') then 1 else 0 end as AIDS
+            , case when comorbid_lace in ('Moderate or severe liver or renal disease') then 1 else 0 end as ModerateOrSevereLiverOrRenalDisease
+            , case when comorbid_lace in ('Metastatic solid tumor') then 1 else 0 end as MetastaticSolidTumor
+        from nathalie.prjrea_case_diag
+    ) S1
+    group by case_id
+) S2
+on S2.case_id=Ca.case_id
+;
+
+
+
+/*
+FINALIZE
+*/
+
+drop table if exists nathalie.prjrea_step1b_diagnoses
+;
+
+create table nathalie.prjrea_step1b_diagnoses 
+as
+select * from nathalie.tmp_lace
+;
+
+
+
+
+
+/*
+Clean up
+*/
+
+drop table if exists nathalie.tmp_lace;
+drop table if exists nathalie.tmp_primarydx;
+drop table if exists nathalie.tmp_case_diag;
