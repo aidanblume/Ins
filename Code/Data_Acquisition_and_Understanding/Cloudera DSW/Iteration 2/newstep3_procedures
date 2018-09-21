@@ -1,0 +1,181 @@
+/***
+Title:              step1_dedup_inpatient_cases_from_HOAP
+Description:        Associates cases with procedures in a relationship table.
+                    Associates cases with surgery in a relationship table. 
+Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
+Data Source:        swat.claims_universe and HOAP.HOA QNXT, CLM and ENC case tables. 
+Input:              NATHALIE.prjrea_step1b_diagnoses
+Output:             NATHALIE.prjrea_case_proc (includes newly engineered fields, e.g. surgery)
+                    NATHALIE.prjrea_step1c_procedures
+Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
+                    This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
+                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
+***/
+
+/*
+PRJREA_CASE_PROC
+Purpose:    To create a relationship table that links cases to procedures
+*/
+
+drop table if exists nathalie.tmp_case_proc
+;
+
+create table nathalie.tmp_case_proc 
+as 
+select distinct C.case_id , CP.proc
+from NATHALIE.prjrea_step1b_diagnoses as C
+left join 
+(
+     -- union of cases across 3 data tables: qnxt, clm, enc
+    select distinct cin_no, adm_dt, proc
+    from
+    (
+        select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CD.servcode='' then null else CD.servcode end as proc
+        from swat.claims_universe as C
+        left join plandata.claimdetail as CD
+        on C.claimid=CD.claimid
+        where substr(C.provid,1,1)='H'
+        and C.billtype2='IP-Hosp'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
+        from hoap.clm_case_inpsnf
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+        union
+        select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
+        from hoap.ENC_CASE_INPSNF
+        where srv_cat = '01ip_a'
+    ) S
+) as CP
+on C.cin_no=CP.cin_no
+where CP.adm_dt>=C.adm_dt and CP.adm_dt<=C.dis_dt
+;
+
+
+/*
+DETERMINE WHETHER THERE WERE SURGERIES< USING NCQA TABLE
+*/
+
+--relationship table
+
+drop table if exists nathalie.tmp_case_surgeries;
+
+create table nathalie.tmp_case_surgeries
+as
+select Ca.*, case when S.flag=1 then 1 else 0 end as proc_surgeries
+from NATHALIE.tmp_case_proc as Ca
+left join 
+(
+    select A.case_id, 1 as flag
+    from NATHALIE.tmp_case_proc as A -- this relationship table was generated during step 1
+    inner join
+    flatfile.ncqa2016_hcc_surg as B
+    on A.proc=B.procedure_code
+) S
+on Ca.case_id=S.case_id
+;
+
+/*
+FINAL RELATIONSHIP TABLE
+*/
+
+drop table if exists nathalie.prjrea_case_proc;
+
+create table nathalie.prjrea_case_proc
+as
+select * from nathalie.tmp_case_surgeries
+;
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+
+--Add surgery as a field to the analytic table. 
+
+drop table if exists nathalie.prjrea_step1c_procedures;
+
+create table nathalie.prjrea_step1c_procedures
+as
+select Ca.*, isnull(S.surgery, 0) as surgery
+from NATHALIE.prjrea_step1b_diagnoses as Ca
+left join
+(
+    select case_id, max(proc_surgeries) as surgery
+    from NATHALIE.prjrea_case_proc
+    group by case_id
+) S
+on Ca.case_id=S.case_id
+;
+
