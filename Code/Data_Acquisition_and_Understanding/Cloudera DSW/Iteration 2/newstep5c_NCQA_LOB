@@ -1,0 +1,42 @@
+/***
+Title:              step3_PPG_LOB_PCP
+Description:        Add PPG, Product, Segment, PCP assignment at time of admit 
+Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
+Data Source:        nathalie.prjrea_step3b_PPG_LOB_PCP_fromHOAP
+Output:             nathalie.prjrea_step3c_NCQA_LOB
+Notes:              Can be improved by bringing in pcp info. Search below for /*TK HERE YOU HAVE OPPORTUNITY TO BRING IN PCP
+***/
+
+-- add more LOB info from HOAP
+
+drop table if exists nathalie.prjrea_step3c_NCQA_LOB;
+
+create table nathalie.prjrea_step3c_NCQA_LOB
+as
+select *
+    , case 
+        when ppg in ('AVHC','BHC','CTHC','DHHC','ELHC','EMCH',
+            'ERCH','GPHC','HCHC','HDHS','HHHC','HUMC','HUMF','LACU',
+            'LBCH','LCC','LLAC','LPHC','MLKH','OVMC','OVMV','RLAC',
+            'SFHC','SGHC','SPHC','STR','THC','WIHC','WVCH') then 'DHS-PPG' 
+        else 'Non-DHS PPG'
+    end as DHS_site
+    , case
+        when ppg in ('AVHC','HDHS','LCC','LLAC','SPHC') then 'served by non-DHS facilities' --Shared risk / Antelope Valley PPG members typically go to non-DHS facilities. See email from Brandon Shelton Sent: Friday, August 31, 2018 2:02 PM
+        when ppg in ('BHC','CTHC','DHHC','ELHC','EMCH',
+            'ERCH','GPHC','HCHC','HDHS','HHHC','HUMC','HUMF','LACU',
+            'LBCH','LPHC','MLKH','OVMC','OVMV','RLAC',
+            'SFHC','SGHC','STR','THC','WIHC','WVCH') then 'served by DHS facilities'            
+        else 'served by non-DHS facilities'
+    end as DHS_service   
+    , case
+        when product_name='Cal-Medi Connect (CMC)' then 'Medi-Medi'
+        when segment in ('CCI') then 'Medi-Medi'
+        when segment in ('MCE', 'TANF', 'SPD') and (product_name<>'Cal_medi Connect (CMC)' or product_name is null) then 'Medicaid'
+        when product_name='LA Care Covered/Health Benefits Exchange' then 'Commercial'
+        when product_name in ('PASC-SEIU', 'Healthy Kids') then 'Commercial'
+        else null
+    end as NCQA_LOB
+from nathalie.prjrea_step3b_PPG_LOB_PCP_fromHOAP
+;
+
