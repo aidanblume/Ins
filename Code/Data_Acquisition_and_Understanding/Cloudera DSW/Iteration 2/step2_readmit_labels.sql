@@ -2,7 +2,7 @@
 Title:              step2_readmit_labels
 Description:        Compute whether is a 30 d, 90 d readmit and whether is followed by a readmit at 30 d, 90 d. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step1c_procedures
+Data Source:        nathalie.prjrea_step1_inpatient_cases
 Output:             NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ***/
 
@@ -16,7 +16,7 @@ drop table if exists nathalie.tmp
  
 create table nathalie.tmp as
 select *, row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber 
-from nathalie.prjrea_step1c_procedures
+from nathalie.prjrea_step1_inpatient_cases
 ;
 
 
@@ -29,7 +29,7 @@ drop table if exists nathalie.tmp2
 
 create table nathalie.tmp2 as
 select *, row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber 
-from nathalie.prjrea_step1c_procedures
+from nathalie.prjrea_step1_inpatient_cases
 ;
 
 
@@ -127,5 +127,3 @@ drop table if exists tmp;
 drop table if exists tmp2;
 drop table if exists tmp_base;
 
-
-select max(adm_dt) from PRJREA_STEP2_READMIT_LABELS; 
