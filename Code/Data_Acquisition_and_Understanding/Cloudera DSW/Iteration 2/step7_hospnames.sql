@@ -40,12 +40,7 @@ union
 select *, null as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0012854')
 ;
 
----
-
 drop table if exists nathalie.prjrea_step4b_hospitals
-;
-
-set max_row_size = 7mb
 ;
 
 create table nathalie.prjrea_step4b_hospitals
@@ -115,5 +110,5 @@ and A.adm_dt = PROVNAME_REF.adm_dt
 and A.dis_dt = PROVNAME_REF.dis_dt
 ;
 
-set max_row_size = 1mb
-;
+drop table if exists nathalie.tmp;
+
