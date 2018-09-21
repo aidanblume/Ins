@@ -1,0 +1,219 @@
+--to do (updated 20180911): include the newer NCQA files when they are released on November 2018. Then error check the code. Then include the filters from the value sets (preg, chemo etc). Then compare expected scores to our own model. 
+
+/*
+* STEPS 1-5
+*/
+
+-- step 1: Identify all acute inpatient discharges on or between January 1 and December 1 of the measurement year. 
+    -- done, by date range ignored
+-- step 2: Acute-to-acute direct transfers: Keep the original admission date as the Index Admission Date, but use the direct transfer’s discharge date as the Index Discharge Date. 
+    -- done
+-- step 3: Exclude hospital stays where the Index Admission Date is the same as the Index Discharge Date. 
+    -- done
+-- skip step 4: Exclude hospital stays for the following reasons: 
+        -- •	The member died during the stay; 
+        -- •	Female members with a principal diagnosis of pregnancy (Pregnancy Value Set) on the discharge claim. 
+        -- •	A principal diagnosis of a condition originating in the perinatal period (Perinatal Conditions Value Set) on the discharge claim.
+    -- PARTIALLY DONE: only excluded stays where member died. NOTE: THIS MEANS THAT I NEED TO COMPUTE 'EXPECTED' FOR PREGNANCY/PERINATAL SOME OTHER WAY. 
+-- skip step 5: Calculate continuous enrollment.
+    -- NOT DONE
+
+-- Only include cases with an adm_age and an ncqa_lob. Exclude cases where either value is null. 
+
+/*
+* STEP 6: Assign each acute inpatient stay to an age and stratification category using the reporting instructions below.
+*/
+
+--RISK ADJUSTMENT DETERMINATION
+
+drop table if exists nathalie.NCQA_EstRR
+;
+--295623 whereas nathalie.prjrea_analytic_set has count 351956; where demog_weight is not null and base_weight is not null--> implies that A.ncqa_lob is not null, A..adm_age is not null
+
+create table nathalie.NCQA_EstRR
+as
+select case_id
+        -- Sum all weights associated with the IHS : Estimated Readmission Risk = [exp (sum of weights for IHS)] / [ 1 + exp (sum of weights for IHS)]
+        -- Sum all weights associated with the IHS : Estimated Readmission Risk = [exp (sum_w)] / [ 1 + exp (sum_w)]
+        , exp(sum_w)/(1+exp(sum_w)) as EstRR
+from 
+(   
+
+    select  case_id, ncqa_lob, adm_age
+            , IsNull(max(surgery_weight), 0)+IsNull(max(dischCC_weight), 0)+IsNull(sum(IsNull(comorb_weight, 0)), 0)+IsNull(max(demog_weight), 0)+IsNull(max(base_weight), 0) as sum_w
+    from
+    (
+        select A.case_id, A.ncqa_lob, A.adm_age
+            , surgery_weight, dischCC_weight, comorb_weight, demog_weight, base_weight
+        from nathalie.prjrea_analytic_set A
+        left join 
+        (    -- S1: Surgeries: Determine if the member underwent surgery during the inpatient stay then assign weight that is appropriate to age & LOB.  
+            select A.case_id
+                ,   case  
+                        when B.proc_surgeries=1 and A.ncqa_lob='Medi-Medi' and A.adm_age>=65 then W1.weight --Medicare (in our case, Medi-Medi)
+                        when B.proc_surgeries=1 and A.ncqa_lob='Medi-Medi' and A.adm_age>=18 and A.adm_age<65 then W2.weight--Medicare (in our case, Medi-Medi)
+                        when B.proc_surgeries=1 and A.ncqa_lob='Commercial' then W3.weight -- Commercial
+                        when B.proc_surgeries=1 and A.ncqa_lob='Medicaid' then W4.weight --Medicaid 
+                        else null
+                    end as surgery_weight
+            from nathalie.prjrea_analytic_set A 
+            left join nathalie.prjrea_case_surgeries B on A.case_id=B.case_id
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Surgery') W1
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Surgery') W2
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Surgery') W3
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Surgery') W4
+            where A.ncqa_lob is not null
+            and A.adm_age is not null
+        ) S1
+        on A.case_id=S1.case_id
+        left join
+        (   -- S2: Discharge condition: Assign a discharge Clinical Condition (CC) category code or codes to the IHS based on its primary discharge diagnosis. For acute-to-acute direct transfers, use the direct transfer’s primary discharge diagnosis.
+            --TK: could mismatch beteen cc and weight tables be due to fact that cc table is from 2016, not 2018?
+            select A.case_id
+                ,   case
+                        when A.ncqa_lob='Medi-Medi' and A.adm_age>=65 then W1.weight --Medicare (in our case, Medi-Medi)
+                        when A.ncqa_lob='Medi-Medi' and A.adm_age>=18 and A.adm_age<65 then W2.weight--Medicare (in our case, Medi-Medi)
+                        when A.ncqa_lob='Commercial' then W3.weight -- Commercial
+                        when A.ncqa_lob='Medicaid' then W4.weight --Medicaid 
+                        else null
+                    end as dischCC_weight
+            from nathalie.prjrea_analytic_set A 
+            left join
+            --Primary diagnosis at discharge (or closest approximation thereof)
+            (
+                select *, row_number() over (partition by case_id order by diagtype2 asc, diag_dt desc) as rn
+                from 
+                (
+                    select *
+                        ,   case 
+                                when diagtype='Primary' then 1
+                                when diagtype='Admit' then 2
+                                when diagtype is null then 3
+                                when diagtype='Trauma' then 4
+                                when diagtype='PRV' then 5
+                                when diagtype='Secondary' then 6
+                                else 7
+                            end as diagtype2
+                    from nathalie.prjrea_case_diag 
+                ) S
+            ) Dx
+            on A.case_id=Dx.case_id
+            --Table with category assignment of each dx
+            left join flatfile.ncqa2016_pcr_dischcc Cat on replace (Dx.diag, '.', '')=Cat.discharge_diagnosis
+            --Tables with weight assignmebht of each category, by age and LOB
+            left join flatfile.ncqa2018_PCR_MA_DischCC_Weight_65plus W1 on Cat.discharge_cc=W1.category
+            left join flatfile.ncqa2018_PCR_MA_DischCC_Weight_Under65 W2 on Cat.discharge_cc=W2.category
+            left join flatfile.ncqa2018_PCR_Comm_DischCC_Weight W3 on Cat.discharge_cc=W3.category
+            left join flatfile.ncqa2018_PCR_MD_DischCC_Weight W4 on Cat.discharge_cc=W4.category
+            where Dx.rn = 1
+        ) S2
+        on A.case_id=S2.case_id
+        left join
+        (   -- S3: Comorbidities: Refer to the Utilization Risk Adjustment Determination in the Guidelines for Risk Adjusted Utilization Measures.
+            --TK: could mismatch beteen cc and weight tables be due to fact that cc table is from 2016, not 2018?
+            select A.case_id
+                ,   case     
+                        when A.ncqa_lob='Medi-Medi' and A.adm_age>=65 then W1.weight --Medicare (in our case, Medi-Medi)
+                        when A.ncqa_lob='Medi-Medi' and A.adm_age>=18 and A.adm_age<65 then W2.weight--Medicare (in our case, Medi-Medi)
+                        when A.ncqa_lob='Commercial' then W3.weight -- Commercial
+                        when A.ncqa_lob='Medicaid' then W4.weight --Medicaid 
+                        else null
+                    end as comorb_weight
+            from nathalie.prjrea_analytic_set A 
+            left join
+            ( --Get category assignment for every dx in the case; allow only 1 instance of each class per case
+                select distinct Dx.case_id, Cat.comorbid_cc
+                from nathalie.prjrea_case_diag Dx
+                left join flatfile.ncqa2016_cc_comorbid Cat on replace (Dx.diag, '.', '')=Cat.diagnosis_code
+                where Cat.icd_version='ICD-10'
+            ) S
+            on A.case_id=S.case_id
+            --Tables with weight assignmebht of each category, by age and LOB
+            left join flatfile.ncqa2018_pcr_ma_comorbhcc_weight_65plus W1 on S.comorbid_cc=W1.category
+            left join flatfile.ncqa2018_pcr_ma_comorbhcc_weight_under65 W2 on S.comorbid_cc=W2.category
+            left join flatfile.ncqa2018_pcr_comm_comorbhcc_weight W3 on S.comorbid_cc=W3.category
+            left join flatfile.ncqa2018_pcr_md_comorbhcc_weight W4 on S.comorbid_cc=W4.category
+        ) S3
+        on A.case_id=S3.case_id
+        left join
+        (    -- S4: Link the age and gender weights for each IHS.
+            select case_id
+                ,   case
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=85 then W1.weight --Medicare (in our case, Medi-Medi), 65yo+
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=75 and A.adm_age<85 then W2.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=65 and A.adm_age<75 then W3.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=85 then W4.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=75 and A.adm_age<85 then W5.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=65 and A.adm_age<75 then W6.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=18 and A.adm_age<45 then W7.weight --Medicare (in our case, Medi-Medi), 18-64yo
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=45 and A.adm_age<55 then W8.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='M' and A.adm_age>=55 and A.adm_age<65 then W9.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=18 and A.adm_age<45 then W10.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=45 and A.adm_age<55 then W11.weight 
+                        when A.ncqa_lob='Medi-Medi' and A.gender='F' and A.adm_age>=55 and A.adm_age<65 then W12.weight 
+                        when A.ncqa_lob='Commercial' and A.gender='M' and A.adm_age>=18 and A.adm_age<45 then W13.weight --Commercial
+                        when A.ncqa_lob='Commercial' and A.gender='M' and A.adm_age>=45 and A.adm_age<55 then W14.weight 
+                        when A.ncqa_lob='Commercial' and A.gender='M' and A.adm_age>=55 and A.adm_age<65 then W15.weight 
+                        when A.ncqa_lob='Commercial' and A.gender='F' and A.adm_age>=18 and A.adm_age<45 then W16.weight 
+                        when A.ncqa_lob='Commercial' and A.gender='F' and A.adm_age>=45 and A.adm_age<55 then W17.weight 
+                        when A.ncqa_lob='Commercial' and A.gender='F' and A.adm_age>=55 and A.adm_age<65 then W18.weight 
+                        when A.ncqa_lob='Medicaid' and A.gender='M' and A.adm_age>=18 and A.adm_age<45 then W19.weight --Medicaid
+                        when A.ncqa_lob='Medicaid' and A.gender='M' and A.adm_age>=45 and A.adm_age<55 then W20.weight 
+                        when A.ncqa_lob='Medicaid' and A.gender='M' and A.adm_age>=55 and A.adm_age<65 then W21.weight 
+                        when A.ncqa_lob='Medicaid' and A.gender='F' and A.adm_age>=18 and A.adm_age<45 then W22.weight 
+                        when A.ncqa_lob='Medicaid' and A.gender='F' and A.adm_age>=45 and A.adm_age<55 then W23.weight 
+                        when A.ncqa_lob='Medicaid' and A.gender='F' and A.adm_age>=55 and A.adm_age<65 then W24.weight 
+                        else null
+                    end as demog_weight
+            from nathalie.prjrea_analytic_set A
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Male 85+') W1
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Male 75-84') W2
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Male 65-74') W3
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Female 85+') W4
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Female 75-84') W5
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Age and Gender' and description='Female 65-74') W6
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Male 18-44') W7
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Male 45-54') W8
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Male 55-64') W9
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Female 18-44') W10
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Female 45-54') W11
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Age and Gender' and description='Female 55-64') W12
+            cross join (select * from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Male 18-44%') W13 --
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Male 45-54%') W14
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Male 55-64%') W15
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Female 18-44%') W16
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Female 45-54%') W17
+            cross join (select weight from flatfile.ncqa2018_pcr_comm_otherweights where category='Age and Gender' and description like '%Female 55-64%') W18
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Male 18-44%') W19
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Male 45-54%') W20
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Male 55-64%') W21
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Female 18-44%') W22
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Female 45-54%') W23
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Age and Gender' and description like '%Female 55-64%') W24
+        ) S4
+        on A.case_id=S4.case_id
+        left join
+        (    -- S5: Identify the base risk weight.
+            select case_id
+                ,   case
+                        when A.ncqa_lob='Medi-Medi' then W1.weight --Medicare (in our case, Medi-Medi), 65yo+
+                        when A.ncqa_lob='Medi-Medi' then W2.weight --Medicare (in our case, Medi-Medi), 18-64yo
+                        when A.ncqa_lob='Commercial' then W3.weight --Commercial
+                        when A.ncqa_lob='Medicaid' then W4.weight --Medicaid
+                        else null
+                    end as base_weight
+            from nathalie.prjrea_analytic_set A
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_65plus where category='Base Risk Weight') W1
+            cross join (select weight from flatfile.ncqa2018_pcr_ma_otherweights_under65 where category='Base Risk Weight') W2
+            cross join (select * from flatfile.ncqa2018_pcr_comm_otherweights where category='Base Risk Weight') W3
+            cross join (select weight from flatfile.ncqa2018_pcr_md_otherweights where category='Base Risk Weight') W4
+        ) S5
+        on A.case_id=S5.case_id
+    ) WEIGHTS
+    where demog_weight is not null and base_weight is not null
+    group by case_id
+) X
+;
+
+
+
