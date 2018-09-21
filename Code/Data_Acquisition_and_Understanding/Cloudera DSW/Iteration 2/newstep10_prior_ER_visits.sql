@@ -99,3 +99,5 @@ left join
 ) b
 on a.cin_no = b.cin_no and a.adm_dt = b.adm_dt
 ;
+
+
