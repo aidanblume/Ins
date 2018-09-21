@@ -2,7 +2,7 @@
 Title:              step2_readmit_labels
 Description:        Compute whether is a 30 d, 90 d readmit and whether is followed by a readmit at 30 d, 90 d. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step1_inpatient_cases
+Data Source:        nathalie.prjrea_step1c_procedures
 Output:             NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ***/
 
@@ -13,28 +13,23 @@ This label is used when computing readmission rates at readmitting facilities, P
 
 drop table if exists nathalie.tmp
 ;
-
+ 
 create table nathalie.tmp as
 select *, row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber 
-from nathalie.prjrea_step1_inpatient_cases
+from nathalie.prjrea_step1c_procedures
 ;
 
-refresh nathalie.tmp
-;
 
 insert into NATHALIE.tmp (adm_dt, dis_dt, rownumber)
 values('1900-01-01', '1900-01-01', 0)
 ; 
-
-refresh nathalie.tmp
-;
 
 drop table if exists nathalie.tmp2
 ;
 
 create table nathalie.tmp2 as
 select *, row_number() over (order by cin_no asc, adm_dt asc, dis_dt asc) as rownumber 
-from nathalie.prjrea_step1_inpatient_cases
+from nathalie.prjrea_step1c_procedures
 ;
 
 
@@ -73,8 +68,7 @@ FROM
 ) AS S
 ;
 
-refresh nathalie.tmp_base
-;
+
 
 /*
 Compute "is_followed_by_a_30d_readmit" and "is_followed_by_a_90d_readmit".
@@ -86,14 +80,8 @@ drop table if exists NATHALIE.tmp2;
 create table NATHALIE.tmp2 as
 select * from NATHALIE.tmp_base;
 
-refresh nathalie.tmp2
-;
-
 insert into NATHALIE.tmp2 (adm_dt, dis_dt, rownumber)
 values('1900-01-01', '1900-01-01', 0);
-
-refresh nathalie.tmp2
-;
 
 --main computation
 drop table if exists NATHALIE.PRJREA_STEP2_READMIT_LABELS
@@ -139,4 +127,5 @@ drop table if exists tmp;
 drop table if exists tmp2;
 drop table if exists tmp_base;
 
-select count(*) from PRJREA_STEP2_READMIT_LABELS where case_id is null;
+
+select max(adm_dt) from PRJREA_STEP2_READMIT_LABELS; 
