@@ -22,7 +22,6 @@ drop table if exists nathalie.tmp_raw_input
 -- select all claims and encounters for SNF-Inpatient with revenue codes for subacute, snf and ltc
 create table nathalie.tmp_raw_input
 as
-
 select claimid as case_id, carriermemid as cin_no, startdate as adm_dt, enddate as dis_dt, provid as provider
     , case when ltc_claim = 'yes' then 'ltc' when snf_claim = 'yes' then 'snf' when suba_claim = 'yes' then 'subacute' end as provider_type
     , 1 as source
@@ -524,6 +523,7 @@ set max_row_size=7mb;
 drop table if exists prjrea_step4e_postdischargeSNF
 ;
 
+
 create table prjrea_step4e_postdischargeSNF
 as
 select A.*
@@ -595,3 +595,6 @@ drop table if exists SNFtraffic1
 
 drop table if exists SNFtraffic2
 ;
+
+DROP TABLE if exists nathalie.tmp_cases; DROP TABLE if exists nathalie.tmp_completedatepairs; DROP TABLE if exists nathalie.tmp_long_cases; DROP TABLE if exists nathalie.tmp_raw_input; 
+DROP TABLE if exists nathalie.tmp_respaned_input; DROP TABLE if exists nathalie.tmp_traffic_monthly; DROP TABLE if exists nathalie.tmp_traffic_wholeperiod;
