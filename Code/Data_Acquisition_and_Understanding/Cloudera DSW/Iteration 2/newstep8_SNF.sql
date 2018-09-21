@@ -4,7 +4,7 @@ Description:        Adds member's SNF if the member was housed at a SNF at any t
                     inpatient discharge, whichever was more recent. If a member is admitted to several SNFs during this period, then each SNF is attached to the 
                     case that is sent to TABLEAU so that each may share in the responsibility for the readmission. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step4c_PPG 
+Data Source:        prjrea_step4b_hospitals; WAS: nathalie.prjrea_step4c_PPG 
 Output:             nathalie.prjrea_step4d_SNF has most recent SNF. Contains 1 row per inpatient case. This is the file that is being built for modeling purposes. 
                     -- nathalie.prjrea_tblo_readmit_SNF has several rows per inpatient case when the inpatient case was preceded by several valid SNF admits. 
                     [Note that unlike other tables meant for Tableau, here: Aggregate tables showing rate by SNF for period of N days preceding readmission 
@@ -14,7 +14,6 @@ Issues:             Alternative coding. An alternative method may be: VIA REFERR
                     select claimid, referralid, admitsource from plandata.claim where [claimid matches one in the case crosswalk table]; ATTACH SNF NAME TO DATA)
 ***/
 
---
 
 drop table if exists nathalie.tmp_raw_input
 ;
@@ -230,7 +229,8 @@ from
         , X2.days_since_preadmitSNFLTCSA_tmp
         , X2.adm_dt_preadmitSNFLTCSA
         , X2.dis_dt_preadmitSNFLTCSA
-    from nathalie.prjrea_step4c_PPG as All_inp
+    from nathalie.prjrea_step4b_hospitals as All_inp
+    -- from nathalie.prjrea_step4c_PPG as All_inp
     left join
     -- ( -- select only 1 episode per SNF per case (avoid representing the same SNF multiple times per case)
     ( -- select only 1 most recent CFLTCSA stay
@@ -252,7 +252,8 @@ from
                 -- , row_number() over(partition by IP.case_id order by preadmitSNFLTCSA.dis_dt desc) as rownumber --remove this line because it makes more sense to keep all SNFs in the inter-hospitalization period rather than just the most recent one.
                 -- , row_number() over(partition by IP.cin_no, IP.adm_dt, IP.dis_dt, preadmitSNFLTCSA.provider order by preadmitSNFLTCSA.dis_dt desc) as rownumber -- keep the most recent valid stay for each SNF so you avoid having several rows for the same SNF when a member went in and out of it repeatedly.
                 , row_number() over(partition by IP.cin_no, IP.adm_dt, IP.dis_dt order by preadmitSNFLTCSA.dis_dt desc, preadmitSNFLTCSA.adm_dt) as rownumber -- keep the most recent valid stay
-            from nathalie.prjrea_step4c_PPG as IP
+            from nathalie.prjrea_step4b_hospitals as IP
+            -- from nathalie.prjrea_step4c_PPG as IP
             left join nathalie.tmp_long_cases as preadmitSNFLTCSA
             on IP.cin_no = preadmitSNFLTCSA.cin_no
             where IP.adm_dt >= preadmitSNFLTCSA.adm_dt --keep preadmitSNFLTCSA that started before the IP admit (eliminate preadmitSNFLTCSA that began after IP)
@@ -470,7 +471,7 @@ select A.*
             else 0
         end as snfltcsa_14dback
     , B.snfltcsa_admitsthismonth
-from nathalie.prjrea_step4c_PPG as A
+from nathalie.prjrea_step4b_hospitals as A
 left join 
 (
     select *
