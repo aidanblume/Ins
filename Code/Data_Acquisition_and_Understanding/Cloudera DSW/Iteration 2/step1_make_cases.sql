@@ -1,20 +1,21 @@
 /***
-Title:              step1_dedup_inpatient_cases_from_HOAP
+Title:              step1_make_cases.sql
 Description:        Generates a data set of acute inpatient cases (=stays) from the HOAP.HOA "case" tables. 
                     Eliminates duplicates and merges cases that are contiguous by 1 day. 
                     Is 1st step in generating analytic data sets for readmission rate computation.
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        swat.claims_universe
+Data Sources:       swat.claims_universe
                     HOAP.HOA QNXT, CLM and ENC case tables. 
-Output:             NATHALIE.prjrea_step1a_inpatient_cases
-Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
-                    This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
-                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
+Output:             NATHALIE.prjrea_step1_inpatient_cases
+Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' for HOAP source. This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
+                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017.
+                    3. Provider is not used to individuate cases. The 'Provider' field is in fact 'last provider' in cases where more than one provider attendedto the member during a case. 
 ***/
 
 /*
 UNIQUE_CASE_PIECES
-Purpose:    To merge data from HOA's 3 case tables with priority QNXT>CLM>ENC
+Purpose:    To merge data from swat.claimsuniverse and HOA's 3 case tables with priority Cl_U  [>QNXT]  >CLM>ENC **HOAP.QNXT has been removed. 
+Plan is to replace HOAP with all tables that source hope as well as any comprehensive collection of encounters + claims. 
 */
 
 drop table if exists NATHALIE.TMP_CASE_PIECES 
@@ -199,12 +200,17 @@ on S.rnlink = E.rnlink
 
 /*
 --attach data to cases
+- LOS
+- from_ER
+- provider
+- cin_no
++ more under revision. 
 */
 
-drop table if exists nathalie.prjrea_step1a_inpatient_cases
+drop table if exists nathalie.prjrea_step1_inpatient_cases
 ;
 
-create table nathalie.prjrea_step1a_inpatient_cases
+create table nathalie.prjrea_step1_inpatient_cases
 as
 select CASES.case_id
     , CASES.cin_no
