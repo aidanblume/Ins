@@ -1,18 +1,19 @@
 /***
-Title:              step1_dedup_inpatient_cases_from_HOAP
+Title:              step3_diagnoses
 Description:        Make a case_diagnosis relationship table with key field case ID and second field the diagnosis. 
+                    Add to analytic table: primary dx, LACE comorbidities.
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        HOAP.HOA QNXT, CLM and ENC case tables. 
+Data Source:        prjrea_step2_readmit_labels
 Output:             NATHALIE.prjrea_case_diag
-                    NATHALIE.prjrea_step1b_diagnoses 
-Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
-                    This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
-                    2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
-                    3. There is a potential loss of Dx, Pr and provider information when cases are deduped over cin_no and admit_dt alone. Pr and Dx info will be retrieved again later. 
+                    NATHALIE.prjrea_step3_diagnoses 
 ***/
 
 
------------------------------------------------------------------------------- CREATE A DETAILED CASE_DIAG RELATIONSHIP TABLE ---------------------------------------------------------------------------------------
+/***
+**
+** CREATE A DETAILED CASE_DIAG RELATIONSHIP TABLE 
+**
+***/
 
 
 /*
@@ -208,11 +209,8 @@ on C.cin_no=CD.cin_no
 where CD.adm_dt>=C.adm_dt and CD.adm_dt<=C.dis_dt
 ;
 
-
-
-
 /*
-ENGINEER LACE COMORBIDITIES
+FEATURE ENGINEERING: ENGINEER LACE COMORBIDITIES
 */
 
 -- --HACK BROKEN TABLE
@@ -232,29 +230,37 @@ drop table if exists nathalie.prjrea_case_diag
 
 create table nathalie.prjrea_case_diag 
 as
-select A.*, B.comorbid_lace
-from nathalie.tmp_case_diag  as A
-join nathalie.icd10_lacecomorbidity_crosswalk as B
-on A.diag=B.code
+select Ca.*
+    , LACE.comorbid_lace 
+from nathalie.tmp_case_diag as Ca
+left join
+(
+    -- ENGINEER LACE COMORBIDITIES
+    select A.case_id, A.diag, B.comorbid_lace
+    from nathalie.tmp_case_diag  as A
+    join nathalie.icd10_lacecomorbidity_crosswalk as B
+    on A.diag=B.code
+) as LACE
+on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
+-- left join
+-- (
+--     -- ENGINEER HEDIS DIAGNOSTIC CATEGORIES
+-- ) as HEDIS
+-- on
 ;
 
 
+/***
+**
+** ATTACH FIELD TO THE ANALYTIC SET
+**
+***/
 
 /*
-ENGINEER HEDIS DIAGNOSTIC CATEGORIES
+--I elected not to attach all  diagnoses to analytif file but rather to rely on engineering superordinate dx categories according to SME specifications. 
 */
 
-
-
-
-
-
------------------------------------------------------------------------------- ATTACH KEY FIELDS TO ANALYTIC SET ---------------------------------------------------------------------------------------
-
-/*
---Attach all  diagnoses to analytif file. 
-*/
---> done with relationship table & later & in R
+--> TK to do at later date
 
 
 /*
