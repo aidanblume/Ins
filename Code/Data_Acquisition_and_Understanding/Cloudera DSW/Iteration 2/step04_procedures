@@ -1,5 +1,5 @@
 /***
-Title:              step1_dedup_inpatient_cases_from_HOAP
+Title:              step4_procedures
 Description:        Associates cases with procedures in a relationship table.
                     Associates cases with surgery in a relationship table. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
