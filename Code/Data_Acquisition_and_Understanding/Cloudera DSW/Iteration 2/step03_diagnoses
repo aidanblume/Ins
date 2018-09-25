@@ -213,18 +213,6 @@ where CD.adm_dt>=C.adm_dt and CD.adm_dt<=C.dis_dt
 FEATURE ENGINEERING: ENGINEER LACE COMORBIDITIES
 */
 
--- --HACK BROKEN TABLE
-
--- drop table if exists nathalie.icd10_lacecomorbidity_crosswalk;
-
--- create table nathalie.icd10_lacecomorbidity_crosswalk
--- as
--- select split_part(comorbid_lace, '', 1) as comorbid_lace, split_part(comorbid_lace, '', 2) as code 
--- from flatfile.icd10_lacecomorbidity_crosswalk
--- ;
-
---RETOOL
-
 drop table if exists nathalie.prjrea_case_diag
 ;
 
@@ -238,16 +226,43 @@ left join
     -- ENGINEER LACE COMORBIDITIES
     select A.case_id, A.diag, B.comorbid_lace
     from nathalie.tmp_case_diag  as A
-    join nathalie.icd10_lacecomorbidity_crosswalk as B
+    join flatfile.icd10_lacecomorbidity_crosswalk as B
     on A.diag=B.code
 ) as LACE
 on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
 -- left join
 -- (
---     -- ENGINEER HEDIS DIAGNOSTIC CATEGORIES
+--     -- ENGINEER HEDIS DIAGNOSTIC CATEGORIES [bring in from file where developed independently]
 -- ) as HEDIS
 -- on
 ;
+
+-- DELETE WHEN NARENDRA CONFIRMS CREATION OF REPLACEMENT TABLE
+-- create table nathalie.prjrea_case_diag 
+-- as
+-- select Ca.*
+--     , LACE.comorbid_lace 
+-- from nathalie.tmp_case_diag as Ca
+-- left join
+-- (
+--     -- ENGINEER LACE COMORBIDITIES
+--     select A.case_id, A.diag, B.comorbid_lace
+--     from nathalie.tmp_case_diag  as A
+--     join nathalie.icd10_lacecomorbidity_crosswalk as B
+--     on A.diag=B.code
+-- ) as LACE
+-- on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
+-- -- left join
+-- -- (
+-- --     -- ENGINEER HEDIS DIAGNOSTIC CATEGORIES
+-- -- ) as HEDIS
+-- -- on
+-- ;
+
+
+
+
+SELECT * FROM flatfile.icd10_lacecomorbidity_crosswalk LIMIT 100;
 
 
 /***
