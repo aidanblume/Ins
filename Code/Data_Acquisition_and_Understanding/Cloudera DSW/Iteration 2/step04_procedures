@@ -160,9 +160,9 @@ select * from nathalie.tmp_case_surgeries
 
 
 
--------------------------------------------------------------------------------------------------------------------------------------------------------
-
---Add surgery as a field to the analytic table. 
+/*
+Add surgery as a field to the analytic table. 
+*/
 
 drop table if exists nathalie.prjrea_step4_procedures;
 
