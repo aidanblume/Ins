@@ -4,9 +4,9 @@ Description:        Associates cases with procedures in a relationship table.
                     Associates cases with surgery in a relationship table. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        swat.claims_universe and HOAP.HOA QNXT, CLM and ENC case tables. 
-Input:              NATHALIE.prjrea_step1b_diagnoses
+Input:              NATHALIE.prjrea_step3_diagnoses
 Output:             NATHALIE.prjrea_case_proc (includes newly engineered fields, e.g. surgery)
-                    NATHALIE.prjrea_step1c_procedures
+                    NATHALIE.prjrea_step4_procedures
 Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' on the sace files. 
                     This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
                     2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017
@@ -23,7 +23,7 @@ drop table if exists nathalie.tmp_case_proc
 create table nathalie.tmp_case_proc 
 as 
 select distinct C.case_id , CP.proc
-from NATHALIE.prjrea_step1b_diagnoses as C
+from NATHALIE.prjrea_step3_diagnoses as C
 left join 
 (
      -- union of cases across 3 data tables: qnxt, clm, enc
@@ -164,12 +164,12 @@ select * from nathalie.tmp_case_surgeries
 
 --Add surgery as a field to the analytic table. 
 
-drop table if exists nathalie.prjrea_step1c_procedures;
+drop table if exists nathalie.prjrea_step4_procedures;
 
-create table nathalie.prjrea_step1c_procedures
+create table nathalie.prjrea_step4_procedures
 as
 select Ca.*, isnull(S.surgery, 0) as surgery
-from NATHALIE.prjrea_step1b_diagnoses as Ca
+from NATHALIE.prjrea_step3_diagnoses as Ca
 left join
 (
     select case_id, max(proc_surgeries) as surgery
