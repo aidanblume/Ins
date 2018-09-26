@@ -19,7 +19,7 @@ Output:             NATHALIE.prjrea_case_diag
 /*
 nathalie.tmp_case_diag
 Purpose:    Create a relationship table that links diagnoses to the cases defined in step 1. 
-            To do this, apply the same logic as in step1a to gather claims from all sources. Twist: build a table whose diag, diagtype and diag_dt fields reflect in vertical form the information 
+            To do this, apply the same logic as in step1 to gather claims from all sources. Twist: build a table whose diag, diagtype and diag_dt fields reflect in vertical form the information 
             represented horizontally in the source tables through fields dx1 through dx20. 
             Then create the relationship table. Make sure that each row is unique (there's a deduping step to avoid representing a case:diag row multiple times)
 */
@@ -30,7 +30,7 @@ drop table if exists nathalie.tmp_case_diag
 create table nathalie.tmp_case_diag 
 as 
 select distinct C.case_id , CD.diag, CD.diagtype, CD.diag_dt
-from NATHALIE.prjrea_step1a_inpatient_cases as C
+from NATHALIE.prjrea_step1_inpatient_cases as C
 left join 
 ( 
     -- union of cases across 4 data tables: swat.claims_universe and in HOAP, qnxt, clm, enc
@@ -288,7 +288,7 @@ drop table if exists nathalie.tmp_primarydx
 create table nathalie.tmp_primarydx  
 as
 select Ca.*, P.diag as Primary_dx
-from NATHALIE.prjrea_step1a_inpatient_cases as Ca
+from NATHALIE.prjrea_step1_inpatient_cases as Ca
 left join
 (
     select *, row_number() over (partition by case_id order by priority asc, diag_dt desc, diag asc) as rn
@@ -389,10 +389,10 @@ on S2.case_id=Ca.case_id
 FINALIZE
 */
 
-drop table if exists nathalie.prjrea_step1b_diagnoses
+drop table if exists nathalie.prjrea_step3_diagnoses
 ;
 
-create table nathalie.prjrea_step1b_diagnoses 
+create table nathalie.prjrea_step3_diagnoses 
 as
 select * from nathalie.tmp_lace
 ;
