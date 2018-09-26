@@ -5,16 +5,6 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step1_inpatient_cases
 Output:             NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ***/
-
-select adm_dt, dis_dt
-    , days_since_prior_discharge 
-    , is_a_30d_readmit
-    , is_a_90d_readmit
-from PRJREA_STEP2_READMIT_LABELS -- 793021
--- where days_since_prior_discharge is null and (is_a_30d_readmit>0 or is_a_90d_readmit>0)
--- where is_a_30d_readmit>0 and is_a_90d_readmit=0
-where days_since_prior_discharge is not null
-
 drop table if exists NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ;
 
