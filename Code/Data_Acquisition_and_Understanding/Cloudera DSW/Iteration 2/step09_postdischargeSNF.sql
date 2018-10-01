@@ -1,17 +1,16 @@
 /***
-Title:              step4e_postDischSNF
+Title:              step9_postDischSNF
 Description:        Adds member's SNF if the member was housed at a SNF at any time during the 90 d that FOLLOW current hospital discharge date *OR* between hospital discharge 
                     and the next inpatient admit, whichever comes first. If a member is admitted to several SNFs during this period, then each SNF is attached to the 
                     case that is sent to TABLEAU so that each may share in the responsibility for the readmission. 
                     THE RESULTING FILE IS SENT TO TABLEAU ONLY
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step4d_SNF 
-Output:             FOR TABLEAU: 
-                    nathalie.prjrea_tblo_postDischSNF has several rows per inpatient case when the inpatient case was preceded by several valid SNF admits. 
-Issues:             In teh future, an analytic file may be generated where acute admits are still unique rows. The post discharge SNF info may be reduced to
+Data Source:        nathalie.prjrea_step8_snf 
+Output:             nathalie.prjrea_step9_postDischSNF  
+Issues:             In the future, an analytic file may be generated where acute admits are still unique rows. The post discharge SNF info may be reduced to
                     a column indicating the date of the 1st SNF admit post discharge.
 ***/
-
+ 
 /*
 Create SNF, LTC and SA cases.
 */
@@ -232,7 +231,7 @@ from
         , X2.days_until_SNFLTCSA_tmp
         , X2.adm_dt_postdischargeSNFLTCSA
         , X2.dis_dt_postdischargeSNFLTCSA
-    from prjrea_step4d_SNF as All_inp
+    from prjrea_step8_snf as All_inp
     left join
     ( -- select only 1 episode per SNF per case (avoid representing the same SNF multiple times per case)
         select *
@@ -264,11 +263,12 @@ from
                                 when datediff(SNFLTCSA.adm_dt, IP.dis_dt) < 0 then 0
                                 else datediff(SNFLTCSA.adm_dt, IP.dis_dt)
                             end as days_until_SNFLTCSA_tmp
-                    from prjrea_step4d_SNF as IP
+                    from prjrea_step8_snf as IP
                     right join --right not left is required in order to limit set to 'has SNF within 90 d'
                     nathalie.tmp_long_cases as SNFLTCSA
                     on IP.cin_no = SNFLTCSA.cin_no
-                    where days_add(IP.dis_dt, IP.days_until_next_admit) >= SNFLTCSA.adm_dt --keep SNFLTCSA that started before the next IP admit (eliminate SNF that began after next IP admit)
+                    where (days_add(IP.dis_dt, IP.days_until_next_admit) >= SNFLTCSA.adm_dt --keep SNFLTCSA that started before the next IP admit (eliminate SNF that began after next IP admit)
+                            or (IP.days_until_next_admit is null and days_add(IP.dis_dt, 90)>SNFLTCSA.adm_dt)) -- allow for adm then snf then no readmit !!!!!THIS IS KEY CORRECTION
                     and IP.dis_dt < SNFLTCSA.dis_dt --keep SNFSNFLTCSA that existed after IP discharge (eliminate SNFLTCSA stays that ended before IP discharge)
                 ) X
                 where days_until_SNFLTCSA_tmp <= 90 and days_until_SNFLTCSA_tmp >= 0
@@ -511,7 +511,7 @@ on A.postdischarge_SNFLTCSAname = C.fullname
 /*
 GENERATE ANALYTIC FILE BY REDUCING TO 1 ROW PER HOSPITAL ADMIT
 
-nathalie.prjrea_step4d_SNF has most recent SNF. Contains 1 row per inpatient case. This is the file that is being built for modeling purposes. 
+nathalie.prjrea_step8_snf has most recent SNF. Contains 1 row per inpatient case. This is the file that is being built for modeling purposes. 
 
 To reduce the file, rather than select the name of the most recent SNF, drop SNF names altogether and compute the existence of a SNF 
 (1) at all in 90 d or after index discharge, (2) within 1 day of admission, (3) within 3 days of admission, (4) within 7 days of admission,
@@ -520,11 +520,10 @@ To reduce the file, rather than select the name of the most recent SNF, drop SNF
 
 set max_row_size=7mb;
 
-drop table if exists prjrea_step4e_postdischargeSNF
+drop table if exists nathalie.prjrea_step9_postdischargeSNF
 ;
 
-
-create table prjrea_step4e_postdischargeSNF
+create table nathalie.prjrea_step9_postdischargeSNF
 as
 select A.*
     , B.postdischarge_snfltcsaname
@@ -552,7 +551,7 @@ select A.*
         end as snf_14dfwd
     , B.uniquemember_postdischargesnfltcsa_admitsthismonth
     , B.uniquemember_postdischargesnfltcsa_admitsthisperiod
-from nathalie.prjrea_step4d_SNF as A
+from nathalie.prjrea_step8_snf as A
 left join 
 (
     select *
