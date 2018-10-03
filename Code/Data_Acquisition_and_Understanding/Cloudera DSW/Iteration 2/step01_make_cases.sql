@@ -28,11 +28,21 @@ as
 select *
 from
 ( --add number rows inside partitions where each partition is a unique (cin_no, admi_dt, dis_dt) tupple
-    select *
-    , row_number() over(partition by cin_no, adm_dt order by dis_dt desc, source_table asc, case_id desc) as rownumber
+    select case_id, cin_no
+        ,   case 
+                when startdate is null and enddate is not null then enddate
+                else startdate
+            end as adm_dt
+        ,   case
+                when enddate is null and startdate is not null then startdate
+                when enddate < startdate then startdate
+                else enddate
+            end dis_dt
+        , dis_status, provider, from_er, source_table
+    , row_number() over(partition by cin_no, startdate order by enddate desc, source_table asc, case_id desc) as rownumber
     from
     ( -- union of cases across 3 data tables: qnxt, clm, enc
-        select claimid as case_id, startdate as adm_dt, enddate as dis_dt, carriermemid as cin_no
+        select claimid as case_id, startdate, enddate, carriermemid as cin_no
             , discharge_status as dis_status, provid as provider
             , case when admitsource='7' then 1 else 0 end as from_er
             , 1 as source_table
@@ -40,12 +50,12 @@ from
         where substr(provid,1,1)='H'
         and billtype2='IP-Hosp'
         union
-        select case_id, adm_dt, dis_dt, cin_no, dis_status, provider, case when from_er='Y' then 1 else 0 end as from_er
+        select case_id, adm_dt as startdate, dis_dt as enddate, cin_no, dis_status, provider, case when from_er='Y' then 1 else 0 end as from_er
             , 2 as source_table
         from hoap.clm_case_inpsnf as C
         where srv_cat = '01ip_a'
         union
-        select case_id, adm_dt, dis_dt, cin_no, dis_status
+        select case_id, adm_dt as startdate, dis_dt as enddate, cin_no, dis_status
                 -- case 
                 --     when dis_status='00' then 'Still Under Care'
                 --     when dis_status='01' then 'Home'
@@ -73,6 +83,7 @@ from
         from hoap.ENC_CASE_INPSNF as E
         where srv_cat = '01ip_a'
    ) AS PIECES
+   where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
 ) PIECES_PARTITIONED
 where rownumber =  1
 ;
