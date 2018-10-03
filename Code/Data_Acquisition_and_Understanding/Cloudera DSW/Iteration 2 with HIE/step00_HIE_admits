@@ -1,0 +1,88 @@
+/***
+Title:              step00_HIE_admits.sql
+Description:        Captures current admits.
+Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2 with HIE/
+Data Sources:       encp.admit_dischrg_transf_data_snc (eConnect data)
+Output:             NATHALIE.prjrea_step00_HIE_cases
+***/
+
+/*
+eConnect_input
+Purpose:    To capture minimal admit data to allow real-time scoring 
+*/
+
+drop table if exists nathalie.prjrea_step00_HIE_cases
+;
+
+create table nathalie.prjrea_step00_HIE_cases
+as
+select 
+    visit_guid -- unique id for all info on this member's current admit. UNK: is a new one assigned for a readmit < 24 hrs? How about for a transfer to a new provider?
+    /*identity: keep details for identity resolution at 'demog' step*/
+    , member_id
+    -- , account_number
+    -- , last_name
+    -- , first_name
+    -- , middle_name
+    -- , dob
+    -- , phone
+    -- , primary_lang_id
+    -- , primary_lang_text
+    /*Admit*/
+    , ds_visit_type_id
+    , ds_visit_status_id
+    , admit_date
+    -- , admit_reason_id
+    -- , admit_reason_text
+    -- , patient_class_id
+    -- , patient_type_id
+    -- , diag_coding_method
+    -- , diag_priority
+    -- , diag_code
+    -- , diag_text
+    -- , diag_type
+    /*Discharge*/
+    , discharge_date
+    -- , discharge_dispo_id
+    -- , discharge_location_id
+    /*Providers*/
+    -- , admit_source_id
+    -- , admit_type_id
+    -- , hospital_service_id
+    -- , source_facility_id
+    -- , servicing_facility_id
+    /*for action: physicians on case*/
+    -- , admitting_physician
+    -- , attending_last_name
+    -- , attending_first_name
+    -- , attending_id
+    /*for action: exact patient location*/
+    -- , location_point_of_care
+    -- , location_room
+    -- , location_bed
+    -- , location_facility
+    -- , location_building
+    -- , location_floor
+    -- , location_desc
+    -- , location_type
+    /*data sourcing*/
+    -- , created
+    -- , last_modified
+    -- , ds_visit_status_date
+    -- , discharge_status_date
+    -- , last_touch_date
+    -- , required_field_error_ind
+    -- , required_fields_missing
+    -- , data_type_error_ind
+    -- , data_type_error_fields
+    -- , data_length_error_ind
+    -- , data_length_error_fields
+    -- , file_receive_date
+    -- , file_load_date
+    -- , src_file_name
+from encp.admit_dischrg_transf_data_snc 
+;
+
+select distinct admit_date from nathalie.prjrea_step00_hie_cases order by admit_date desc limit 100
+;
+
