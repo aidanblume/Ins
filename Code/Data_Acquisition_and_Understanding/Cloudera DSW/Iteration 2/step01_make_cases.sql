@@ -131,7 +131,7 @@ from
         ) L   
         left join
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by dis_dt asc) + 1 as string)) as rnstart 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -162,7 +162,7 @@ left join
         select L.cin_no, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by dis_dt asc) as string)) as rnend 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -183,7 +183,7 @@ left join
         ) L   
         left join
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) -1 as string)) as rnend 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -202,7 +202,7 @@ left join
                 on SD.cin_no=ED.cin_no and SD.rnsd=ED.rned            
             ) Respanned_input    
         ) R
-        on L.rnstart = R.rnstart
+        on L.rnend = R.rnend
     ) X
     where d > 1 or d is null
 ) E  
