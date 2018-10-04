@@ -39,7 +39,6 @@ from
                 else enddate
             end dis_dt
         , dis_status, provider, from_er, source_table
-    , row_number() over(partition by cin_no, startdate order by enddate desc, source_table asc, case_id desc) as rownumber
     from
     ( -- union of cases across 3 data tables: qnxt, clm, enc
         select claimid as case_id, startdate, enddate, carriermemid as cin_no
@@ -85,7 +84,6 @@ from
    ) AS PIECES
    where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
 ) PIECES_PARTITIONED
-where rownumber =  1
 ;
 
 /*
