@@ -5,11 +5,13 @@ Description:        Generates a data set of acute inpatient cases (=stays) from 
                     Is 1st step in generating analytic data sets for readmission rate computation.
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Sources:       swat.claims_universe
-                    HOAP.HOA QNXT, CLM and ENC case tables. 
+                    HOAP.HOA QNXT, CLM and ENC case tables. [Will be replaced with enc tables that source HOAP]
 Output:             NATHALIE.prjrea_step1_inpatient_cases
 Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' for HOAP source. This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
                     2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017.
                     3. Provider is not used to individuate cases. The 'Provider' field is in fact 'last provider' in cases where more than one provider attendedto the member during a case. 
+                    4. Assumes that claims and encounters have non-null providers. Assumes that either admit date or discharge date or both are populated.
+                    5. Corrects discharge date < admit date by converting discharge date to admit date. If one is null, populates it with th esame value as the other.
 ***/
 
 /*
