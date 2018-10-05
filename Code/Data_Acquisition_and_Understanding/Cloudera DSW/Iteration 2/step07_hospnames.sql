@@ -1,20 +1,18 @@
 /***
-Title:              step4b_hospnames
+Title:              step7_hospnames
 Description:        Add the name of the hospital providing service (at this time, this is the 1st provider in a case; ignores info on transfer provider) 
                     TK: Ask client what info they want to see on the transfer facility
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step4a_demog 
+Data Source:        nathalie.prjrea_step6_demog 
                     plandata.provider
-Output:             nathalie.prjrea_step4b_hospitals is the main data set, not aggregated
-                    -- nathalie.prjrea_tblo_index_hospitals: rates are computed over index hospital
-                    -- nathalie.prjrea_tblo_readmit_hospitals: rates are computed over readmitting hospital
+Output:             nathalie.prjrea_step7_hospitals is the main data set, not aggregated
 Issues:             In QNXT's provider table, the provid field matches many but not all cases.
                     A greater number of matches to QNXT.provider's fedid field exist, but there are duplicate fedid values that point simultaneously to
                     hospitals and to individual providers. The provtype field may help specify hospitals, but the values are specific to smaller subsets
                     that need to be unified into a single 'hospital' group. For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 
                     70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient
                     The fact that there are SNFs indicates that I have a capture problem further upstream.
-***/
+***/ 
 
 --Find all notes about changes in hospital provider id
 
@@ -27,23 +25,23 @@ drop table if exists nathalie.tmp;
 
 create table nathalie.tmp
 as
-select *, provider as provider2 from nathalie.prjrea_step4a_demog where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854') or provider is null)
+select *, provider as provider2 from nathalie.prjrea_step6_demog  where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854') or provider is null)
 union
-select *, 'H0000109' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0011079')
+select *, 'H0000109' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011079')
 union
-select *, 'A0004803' as provider2 from nathalie.prjrea_step4a_demog where provider in ('H0000553')
+select *, 'A0004803' as provider2 from nathalie.prjrea_step6_demog where provider in ('H0000553')
 union
-select *, 'H0000183' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0004000')
+select *, 'H0000183' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0004000')
 union
-select *, 'H0000006' as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0011293')
+select *, 'H0000006' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011293')
 union
-select *, null as provider2 from nathalie.prjrea_step4a_demog where provider in ('A0012854')
+select *, null as provider2 from nathalie.prjrea_step6_demog where provider in ('A0012854')
 ;
 
-drop table if exists nathalie.prjrea_step4b_hospitals
+drop table if exists nathalie.prjrea_step7_hospitals
 ;
 
-create table nathalie.prjrea_step4b_hospitals
+create table nathalie.prjrea_step7_hospitals
 as
 select A.*, PROVNAME_REF.hospname
 from nathalie.tmp as A
