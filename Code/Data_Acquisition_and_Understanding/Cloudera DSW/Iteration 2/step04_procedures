@@ -178,3 +178,4 @@ left join
 ) S
 on Ca.case_id=S.case_id
 ;
+
