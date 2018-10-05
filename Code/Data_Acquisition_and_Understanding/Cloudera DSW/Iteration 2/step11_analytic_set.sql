@@ -1,10 +1,11 @@
 /***
-Title:              step7_analytic_set
+Title:              step11_analytic_set
 Description:        Finalize readmission data set for predictive modeling and clean up workspace 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step6_lace_comorbidities 
+Data Source:        nathalie.prjrea_step10_ER 
 Output:             NATHALIE.PRJREA_analytic_set
                     NATHALIE.PRJREA_analytic_set_LACE
+                    
 ***/
 
 /*
@@ -24,7 +25,7 @@ FROM
         , cin_no, adm_age, agegp_cty, agegp_hedis, agegp_lob_rollup, gender, language_written_code, ethnicity_code, zip_code, zip4, has_phone
         , product_name
         , segment
-        , tmp_lob
+        , lob
         , ncqa_lob
         , ppg
         , ppg_name
@@ -37,17 +38,13 @@ FROM
         -- , case_pr1, case_pr2, case_pr3, case_pr4, case_pr5, case_pr6, case_pr7, case_pr8, case_pr9, case_pr10
         -- , aprdrg, severity
         , primary_dx
-        , previousmyocardialinfarction, cerebrovasculardisease, peripheralvasculardisease, diabeteswithoutcomplications, congestiveheartfailure
-        , diabeteswithendorgandamage, chronicpulmonarydisease, mildliverorrenaldisease, anytumor, dementia, connectivetissuedisease, aids
-        , moderateorsevereliverorrenaldisease, metastaticsolidtumor
-    --         , isnull(PreviousMyocardialInfarction, 0) as PreviousMyocardialInfarction, isnull(CerebrovascularDisease, 0) as CerebrovascularDisease, isnull(PeripheralVascularDisease, 0) as PeripheralVascularDisease
-    -- , isnull(DiabetesWithoutComplications, 0) as DiabetesWithoutComplications
-    -- , isnull(CongestiveHeartFailure, 0) as CongestiveHeartFailure, isnull(DiabetesWithEndOrganDamage, 0) as DiabetesWithEndOrganDamage
-    -- , isnull(ChronicPulmonaryDisease, 0) as ChronicPulmonaryDisease, isnull(MildLiverOrRenalDisease, 0) as MildLiverOrRenalDisease
-    -- , isnull(AnyTumor, 0) as AnyTumor, isnull(Dementia, 0) as Dementia, isnull(ConnectiveTissueDisease, 0) as ConnectiveTissueDisease
-    -- , isnull(AIDS, 0) as AIDS, isnull(ModerateOrSevereLiverOrRenalDisease, 0) as ModerateOrSevereLiverOrRenalDisease, isnull(MetastaticSolidTumor, 0) as MetastaticSolidTumor
-        , surgery
-        -- , isnull(surgery, 0) as surgery
+        , isnull(PreviousMyocardialInfarction, 0) as PreviousMyocardialInfarction, isnull(CerebrovascularDisease, 0) as CerebrovascularDisease, isnull(PeripheralVascularDisease, 0) as PeripheralVascularDisease
+        , isnull(DiabetesWithoutComplications, 0) as DiabetesWithoutComplications
+        , isnull(CongestiveHeartFailure, 0) as CongestiveHeartFailure, isnull(DiabetesWithEndOrganDamage, 0) as DiabetesWithEndOrganDamage
+        , isnull(ChronicPulmonaryDisease, 0) as ChronicPulmonaryDisease, isnull(MildLiverOrRenalDisease, 0) as MildLiverOrRenalDisease
+        , isnull(AnyTumor, 0) as AnyTumor, isnull(Dementia, 0) as Dementia, isnull(ConnectiveTissueDisease, 0) as ConnectiveTissueDisease
+        , isnull(AIDS, 0) as AIDS, isnull(ModerateOrSevereLiverOrRenalDisease, 0) as ModerateOrSevereLiverOrRenalDisease, isnull(MetastaticSolidTumor, 0) as MetastaticSolidTumor
+        , isnull(surgery, 0) as surgery
         , prior_stay_case_id, prior_stay_los, days_since_prior_discharge, is_a_30d_readmit, is_a_90d_readmit
         , preadmitsnfltcsaname, type_preadmitsnfltcsa, days_since_preadmitsnfltcsa, snfltcsa_90dback, snfltcsa_14dback,  snfltcsa_7dback, snfltcsa_3dback, snfltcsa_1dback, snfltcsa_admitsthismonth 
         , postdischarge_snfltcsaname
@@ -115,12 +112,12 @@ FROM
           when is_followed_by_a_30d_readmit < is_a_30d_death then is_a_30d_death
           else is_followed_by_a_30d_readmit
         end as is_followed_by_death_or_readmit   --alt output label addition //TK is this correct???
-    FROM NATHALIE.prjrea_step6_lace_comorbidities 
+    FROM NATHALIE.prjrea_step10_ER 
     -- Select 24 months of records. Discharge date must be specified and must be 6 months old, which allows for a 90 day post index discharge and for claims to come through. 
     where adm_dt >= add_months(now(), -30)
     -- and dis_dt <= add_months(now(), -6)
     and dies_before_discharge = 0 
-    --and segment != 'CCI'
+    --and segment != 'CCI' // Also, ppg!=a DHS ppg; Note that this exclusion will be done in R while modeling, because scoring requires all cases, even those excluded from training. 
     --and datediff(d.dis_dt,d.adm_dt)>0 -- single day admits?
 ) A
 LEFT JOIN
@@ -132,7 +129,7 @@ LEFT JOIN
         from
         (
             select preadmitsnfltcsaname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, snfltcsa_admitsthismonth
-            from NATHALIE.prjrea_step6_lace_comorbidities
+            from NATHALIE.prjrea_step10_ER
             where adm_dt >= add_months(now(), -30)
             -- and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
             -- and dis_dt <= add_months(now(), -6)
@@ -154,7 +151,7 @@ ON A.preadmitsnfltcsaname = B3.preadmitsnfltcsaname
 --         from
 --         (
 --             select postdischarge_snfname, cast(concat(cast(extract(year from adm_dt) as string), lpad(cast(extract(month from adm_dt) as string), 2, '0')) as int) as yrmo, postdischarge_snf_admitsthismonth
---             from NATHALIE.prjrea_step6_lace_comorbidities
+--             from NATHALIE.prjrea_step10_ER
 --             where adm_dt >= add_months(now(), -30)
 --             and adm_dt <= add_months(now(), -6) -- Count SNF admits till time window closes, regardless of discharge status
 --             -- and dis_dt <= add_months(now(), -6)
@@ -193,11 +190,10 @@ CROSS JOIN -- add general membership count
 (
     select count(distinct P.cin_no) as lacare_members_this_period
     from 
-    -- NATHALIE.prjrea_step6_lace_comorbidities Q
-    -- left join
     (
         select Q2.carriermemid as cin_no, Q1.eff_dt, Q1.term_dt
-        from edwp.mem_prov_asgnmt_hist as Q1
+        from 
+        edwp.mem_prov_asgnmt_hist as Q1
         left join 
         plandata.enrollkeys as Q2
         on Q1.MEM_BUS_KEY_NUM = Q2.memid
@@ -207,9 +203,8 @@ CROSS JOIN -- add general membership count
         from edwp.mem_prov_asgnmt_hist
         where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
     ) P
-    -- on Q.cin_no=P.cin_no
-    where P.term_dt >= add_months(now(), -30)
-    -- and P.eff_dt <= add_months(now(), -6)
+    where date_part('year', P.term_dt)=2017
+    --1115730, well short of the 2M I expected; waiting for table ingestions to use Kenyon's query suggestion
 ) D
 ;
 
@@ -228,6 +223,10 @@ CREATE TABLE PRJREA_ANALYTIC_SET_LACE
 AS
 SELECT 
     case_id
+    --FILTERING: segment != 'CCI' when training but not when scoring
+    , segment
+    --FILTERING: exclude 'Y' when training but not when scoring
+    , dhs_site 
     --LACE: LENGTH OF STAY
     , los     
     --LACE: ACUITY
@@ -245,30 +244,31 @@ SELECT
     , dataset_dt
     -- , segment
 FROM NATHALIE.PRJREA_ANALYTIC_SET
-where segment <> 'CCI' or segment is null
+-- where segment <> 'CCI' or segment is null
 ;
 
 
 /*
-CLEAN UP
+HEDIS --- to do
 */
-
-drop table if exists nathalie.prjrea_step1_inpatient_cases;
-drop table if exists nathalie.prjrea_step2_readmit_labels;
-drop table if exists nathalie.nathalie.prjrea_step3_ppg_lob_pcp ;
-drop table if exists nathalie.nathalie.prjrea_step3b_ppg_lob_pcp_fromhoap;
-drop table if exists nathalie.prjrea_step4a_demog;
-drop table if exists nathalie.prjrea_step4b_hospitals;
-drop table if exists nathalie.prjrea_step4d_snf;
-drop table if exists nathalie.nathalie.prjrea_step4e_postdischargesnf;
-drop table if exists nathalie.prjrea_step5_er;
-drop table if exists nathalie.prjrea_step6_lace_comorbidities;
-
-
 
 
 /*
-SIZE OF MEMBERSHIP
+CLEAN UP
+*/ 
+
+-- drop table if exists nathalie.prjrea_step1_inpatient_cases; 
+-- drop table if exists nathalie.prjrea_step2_readmit_labels;
+-- drop table if exists nathalie.nathalie.prjrea_step3_diagnoses ;
+-- drop table if exists nathalie.nathalie.prjrea_step4_procedures ;
+-- drop table if exists nathalie.nathalie.prjrea_step5_ppg_lob_pcp ;
+-- drop table if exists nathalie.nathalie.prjrea_step6_demog ; 
+-- drop table if exists nathalie.nathalie.prjrea_step7_hospitals;
+-- drop table if exists nathalie.prjrea_step8_snf;
+-- drop table if exists nathalie.prjrea_step9_postdischargesnf;
+
+/*
+SIZE OF MEMBERSHIP: 
 */
 
 select count(distinct P.cin_no) as lacare_members_this_period
@@ -287,7 +287,7 @@ from
     where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
 ) P
 where date_part('year', P.term_dt)=2017
---1112634, well short of the 2M I expected
+--1115730, well short of the 2M I expected
 
 --Kenyon says: use EDWBTI.FACT_MTHLY_MEMSHP_QNXT
 select count(*)
@@ -306,7 +306,7 @@ LEFT JOIN EDWP.DIM_LOB E ON E.LOB_NM = A.LOB_BUS_KEY_NM
 where 1=1
 -- AND ACT.ACT_TYPE_DESC in ('New','Continuing')
 AND A.LOB_BUS_KEY_NM <> 'PGM0000000023' /*exclude dup CMC members*/
-AND A.DT_ID >='20180101'
+AND A.DT_ID >='20180101' -- w/o group by below, tot membersghip is 20265284
 GROUP BY A.DT_ID, C.DT_DD_MON_YY,D.PROV_BUS_KEY_NUM, D.ENTY_PROV_NM
 --, /*'' AS SEGMT_CD,*/ B.PLN_PRTNR_DESC
 
@@ -314,9 +314,3 @@ select typeof(dt_id) from EDWP.DIM_CAL
 select typeof(dt_id) from EDWP.FACT_MTHLY_MEMSHP_QNXT
 
 
------------------------------------------------------------------------------------
-
-select * from nathalie.prjrea_eda_sumstat;
-
-
-select * from nathalie.prjrea_Predictions;
