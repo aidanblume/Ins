@@ -1,29 +1,29 @@
 /***
-Title:              step5_prior_ER_visits
+Title:              step10_prior_ER_visits
 Description:        Add a count of ER visits within 6-month to the index hospitalization (for LACE). 
                     Merging priority: QNXT>CLM>ENC
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
-Data Source:        nathalie.prjrea_step4d_SNF 
-Output:             nathalie.prjrea_step5_ER
+Data Source:        nathalie.prjrea_step9_postdischargeSNF 
+Output:             nathalie.prjrea_step10_ER
 ***/
 
-drop table if exists nathalie.prjrea_step5_ER 
+drop table if exists nathalie.prjrea_step10_ER 
 ;
 
 set max_row_size = 20mb
 ;
 
-create table nathalie.prjrea_step5_ER 
+create table nathalie.prjrea_step10_ER 
 as
 select a.*, b.count_prior6m_er
 from
-nathalie.prjrea_step4e_postdischargeSNF a 
+nathalie.prjrea_step9_postdischargeSNF a 
 left join
 (
     select a.cin_no, a.adm_dt
         , sum(case  when (datediff(a.adm_dt, er.er_adm_dt) <= 183 and datediff(a.adm_dt, er.er_adm_dt) >= 1)
                     then 1 else 0 end) as count_prior6m_er
-    from nathalie.prjrea_step4e_postdischargeSNF a
+    from nathalie.prjrea_step9_postdischargeSNF a
     left join 
     (
         select case_id, cin_no, er_adm_dt
@@ -99,5 +99,3 @@ left join
 ) b
 on a.cin_no = b.cin_no and a.adm_dt = b.adm_dt
 ;
-
-
