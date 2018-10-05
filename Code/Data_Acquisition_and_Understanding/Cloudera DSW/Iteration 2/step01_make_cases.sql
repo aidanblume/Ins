@@ -27,7 +27,7 @@ as
 -- add row number by cin_no partition. Will be used at next setp. 
 select *
 from
-( --add number rows inside partitions where each partition is a unique (cin_no, admi_dt, dis_dt) tupple
+( --modify fields
     select case_id, cin_no
         ,   case 
                 when startdate is null and enddate is not null then enddate
@@ -39,7 +39,6 @@ from
                 else enddate
             end dis_dt
         , dis_status, provider, from_er, source_table
-    , row_number() over(partition by cin_no, startdate order by enddate desc, source_table asc, case_id desc) as rownumber
     from
     ( -- union of cases across 3 data tables: qnxt, clm, enc
         select claimid as case_id, startdate, enddate, carriermemid as cin_no
@@ -85,7 +84,6 @@ from
    ) AS PIECES
    where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
 ) PIECES_PARTITIONED
-where rownumber =  1
 ;
 
 /*
@@ -131,7 +129,7 @@ from
         ) L   
         left join
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by dis_dt asc) + 1 as string)) as rnstart 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -162,7 +160,7 @@ left join
         select L.cin_no, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) + 1 as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by dis_dt asc) as string)) as rnend 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -183,7 +181,7 @@ left join
         ) L   
         left join
         (
-            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) as string)) as rnstart 
+            select *, concat(cin_no, cast(row_number() over (partition by cin_no order by adm_dt asc) -1 as string)) as rnend 
             from
             (
                 select SD.cin_no, SD.adm_dt, ED.dis_dt
@@ -202,7 +200,7 @@ left join
                 on SD.cin_no=ED.cin_no and SD.rnsd=ED.rned            
             ) Respanned_input    
         ) R
-        on L.rnstart = R.rnstart
+        on L.rnend = R.rnend
     ) X
     where d > 1 or d is null
 ) E  
@@ -244,7 +242,7 @@ left join
             select Ca.case_id
                 , P.provider
                 , P.source_table
-            , row_number() over (partition by Ca.case_id order by isnull(to_date(P.dis_dt), '1900-01-01') desc, P.source_table asc) as rndesc
+            , row_number() over (partition by Ca.case_id order by isnull(to_date(P.adm_dt), '1900-01-01') desc, P.source_table asc) as rndesc
             from nathalie.tmp_cases Ca 
             left join nathalie.tmp_case_pieces P 
             on Ca.cin_no=P.cin_no and P.adm_dt between Ca.adm_dt and Ca.dis_dt
