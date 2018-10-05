@@ -1,9 +1,7 @@
 /***
 Title:              step9_postDischSNF
 Description:        Adds member's SNF if the member was housed at a SNF at any time during the 90 d that FOLLOW current hospital discharge date *OR* between hospital discharge 
-                    and the next inpatient admit, whichever comes first. If a member is admitted to several SNFs during this period, then each SNF is attached to the 
-                    case that is sent to TABLEAU so that each may share in the responsibility for the readmission. 
-                    THE RESULTING FILE IS SENT TO TABLEAU ONLY
+                    and the next inpatient admit, whichever comes first. If a member is admitted to several SNFs during this period, then the last admit is shown. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        nathalie.prjrea_step8_snf 
 Output:             nathalie.prjrea_step9_postDischSNF  
