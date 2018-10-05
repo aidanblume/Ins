@@ -21,7 +21,7 @@ Plan is to replace HOAP with all tables that source hope as well as any comprehe
 drop table if exists NATHALIE.TMP_CASE_PIECES 
 ;
 
-create table NATHALIE.TMP_CASE_PIECES 
+create table NATHALIE.TMP_CASE_PIECES
 as
 -- select only 1 with same (cin_no, admi_dt, dis_dt) tupple
 -- add row number by cin_no partition. Will be used at next setp. 
@@ -83,8 +83,16 @@ from
         where srv_cat = '01ip_a'
    ) AS PIECES
    where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
+   and provider not in (select provid from nathalie.ltach) -- filters out both null providers and ltachs. Could be a problem if null provider extends LOS. Unavoidable as Impala restricts use of subqueries to point where 'or is not null' cannot be added here. 
 ) PIECES_PARTITIONED
 ;
+
+select count(*) from NATHALIE.TMP_CASE_PIECES_new ;
+--was 1002772; is now 999911 --> loss of 2861 rows
+select distinct provider from
+NATHALIE.TMP_CASE_PIECES_old O
+left anti join NATHALIE.TMP_CASE_PIECES_new N on O.case_id=N.case_id
+
 
 /*
 tmp_cases
