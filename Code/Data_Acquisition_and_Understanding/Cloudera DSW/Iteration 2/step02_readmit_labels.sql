@@ -5,7 +5,6 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step1_inpatient_cases
 Output:             NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ***/
-
 drop table if exists NATHALIE.PRJREA_STEP2_READMIT_LABELS
 ;
 

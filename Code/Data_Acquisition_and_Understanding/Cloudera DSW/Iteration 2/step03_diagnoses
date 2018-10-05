@@ -30,15 +30,15 @@ drop table if exists nathalie.tmp_case_diag
 create table nathalie.tmp_case_diag 
 as 
 select distinct C.case_id , CD.diag, CD.diagtype, CD.diag_dt
-from NATHALIE.prjrea_step2_readmit_labels as C
+from NATHALIE.prjrea_step1_inpatient_cases as C
 left join 
 ( 
-    -- union of cases across 4 data tables: nathalie.claims_universe and in HOAP, qnxt, clm, enc
+    -- union of cases across 4 data tables: swat.claims_universe and in HOAP, qnxt, clm, enc
     select distinct cin_no, adm_dt, diag, diagtype, diag_dt
     from
     (
         select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, CD.codeid as diag, CD.diagtype, CD.createdate as diag_dt
-        from nathalie.claims_universe as C
+        from swat.claims_universe as C
         left join plandata.claimdiag as CD
         on C.claimid=CD.claimid
         where substr(C.provid,1,1)='H'
@@ -260,6 +260,11 @@ on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
 -- ;
 
 
+
+
+SELECT * FROM flatfile.icd10_lacecomorbidity_crosswalk LIMIT 100;
+
+
 /***
 **
 ** ATTACH FIELD TO THE ANALYTIC SET
@@ -283,7 +288,7 @@ drop table if exists nathalie.tmp_primarydx
 create table nathalie.tmp_primarydx  
 as
 select Ca.*, P.diag as Primary_dx
-from NATHALIE.prjrea_step2_readmit_labels as Ca
+from NATHALIE.prjrea_step1_inpatient_cases as Ca
 left join
 (
     select *, row_number() over (partition by case_id order by priority asc, diag_dt desc, diag asc) as rn
