@@ -87,13 +87,6 @@ from
 ) PIECES_PARTITIONED
 ;
 
-select count(*) from NATHALIE.TMP_CASE_PIECES_new ;
---was 1002772; is now 999911 --> loss of 2861 rows
-select distinct provider from
-NATHALIE.TMP_CASE_PIECES_old O
-left anti join NATHALIE.TMP_CASE_PIECES_new N on O.case_id=N.case_id
-
-
 /*
 tmp_cases
 Make cases from collections of claims & encounter files
@@ -250,7 +243,7 @@ left join
             select Ca.case_id
                 , P.provider
                 , P.source_table
-            , row_number() over (partition by Ca.case_id order by isnull(to_date(P.adm_dt), '1900-01-01') desc, P.source_table asc) as rndesc
+            , row_number() over (partition by Ca.case_id order by isnull(to_date(P.dis_dt), '1900-01-01') desc, P.source_table asc) as rndesc
             from nathalie.tmp_cases Ca 
             left join nathalie.tmp_case_pieces P 
             on Ca.cin_no=P.cin_no and P.adm_dt between Ca.adm_dt and Ca.dis_dt
