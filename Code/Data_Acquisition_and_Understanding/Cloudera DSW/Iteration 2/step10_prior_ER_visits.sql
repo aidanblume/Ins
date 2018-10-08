@@ -5,6 +5,7 @@ Description:        Add a count of ER visits within 6-month to the index hospita
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        nathalie.prjrea_step9_postdischargeSNF 
 Output:             nathalie.prjrea_step10_ER
+Assumption:         No case logic because it is assumed that an admit date is uniquely tied to an ER visit (i.e. consecutive admit dates are distinct, and ER visits last no more than 24 hrs)
 ***/
 
 drop table if exists nathalie.prjrea_step10_ER 
@@ -32,9 +33,15 @@ left join
             select *
                 , row_number() over(partition by cin_no, case_id, er_adm_dt order by source_table asc) as rownumber
             from
-            (  -- union reports of ER events from 3 sources: clm, enc, qnxt tables 
-                select distinct case_id, cin_no, trunc(admit_dt_clm, 'DD') as er_adm_dt 
+            (  -- union reports of ER events from 4 sources: claims_universe, & HOAP clm, enc, qnxt tables 
+                select distinct claimid as case_id, carriermemid as cin_no, to_date(startdate) as er_adm_dt
                     , 1 as source_table
+                from SWAT.claims_universe
+                where er_ind = 'yes'
+                
+                union
+                select distinct case_id, cin_no, to_date(trunc(admit_dt_clm, 'DD')) as er_adm_dt 
+                    , 2 as source_table
                 from HOAP.qnxt_hdr_inpsnf  
                 where substr(type_bill,1,2) in ('11','12')
                 -- Type of Bill Codes (Form Locator 4)
@@ -73,8 +80,8 @@ left join
                 -- 5 Trauma Admission (Emergency Admission)
                 and admit_dt_clm is not null
                 union
-                select distinct hdr.case_id, hdr.cin_no, trunc(hdr.admit_dt_clm, 'DD') as er_adm_dt 
-                    , 2 as source_table
+                select distinct hdr.case_id, hdr.cin_no, to_date(trunc(hdr.admit_dt_clm, 'DD')) as er_adm_dt 
+                    , 3 as source_table
                 from hoap.clm_hdr_inpsnf hdr join hoap.clm_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
                 where substr(type_bill,1,2) in ('11','12')
@@ -82,8 +89,8 @@ left join
                     , '0458', '0459', '450', '451', '452', '453', '454', '455', '456', '457', '458', '459')
                 and hdr.admit_dt_clm is not null
                 union
-                select distinct hdr.case_id, hdr.cin_no, trunc(hdr.admit_dt_clm, 'DD') as er_adm_dt 
-                    , 3 as source_table
+                select distinct hdr.case_id, hdr.cin_no, to_date(trunc(hdr.admit_dt_clm, 'DD')) as er_adm_dt 
+                    , 4 as source_table
                 from hoap.enc_hdr_inpsnf hdr join hoap.enc_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
                 where substr(type_bill,1,2) in ('11','12')
