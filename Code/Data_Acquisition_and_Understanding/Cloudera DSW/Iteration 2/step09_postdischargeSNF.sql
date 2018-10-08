@@ -161,7 +161,7 @@ from
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
         ) R
         on L.rnstart = R.rnstart
     ) X
@@ -175,13 +175,13 @@ left join
         select L.cin_no, L.provider, L.provider_type, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnend from nathalie.tmp_respaned_input
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) -1 as string)) as rnend from nathalie.tmp_respaned_input
         ) R
-        on L.rnstart = R.rnstart
+        on L.rnend = R.rnend
     ) X
     where d > 1 or d is null
 ) E  
