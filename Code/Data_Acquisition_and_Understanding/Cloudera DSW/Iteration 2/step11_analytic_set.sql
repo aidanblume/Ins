@@ -5,7 +5,6 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step10_ER 
 Output:             NATHALIE.PRJREA_analytic_set
                     NATHALIE.PRJREA_analytic_set_LACE
-                    
 ***/
 
 /*
@@ -17,7 +16,7 @@ DROP TABLE IF EXISTS NATHALIE.PRJREA_ANALYTIC_SET;
 CREATE TABLE NATHALIE.PRJREA_ANALYTIC_SET 
 -- STORED AS PARQUET
 AS
-SELECT A.*, B3.SNFLTCSA_admits_this_period, C.ppg_members_this_period, D.lacare_members_this_period, to_date(now()) as dataset_dt
+SELECT A.*, B3.SNFLTCSA_admits_this_period, C.ppg_members_this_period, "under revision" as lacare_members_this_period, to_date(now()) as dataset_dt
 FROM
 (
     select
@@ -186,26 +185,6 @@ LEFT JOIN
     group by ppg
 ) C
 ON A.ppg = C.ppg
-CROSS JOIN -- add general membership count
-(
-    select count(distinct P.cin_no) as lacare_members_this_period
-    from 
-    (
-        select Q2.carriermemid as cin_no, Q1.eff_dt, Q1.term_dt
-        from 
-        edwp.mem_prov_asgnmt_hist as Q1
-        left join 
-        plandata.enrollkeys as Q2
-        on Q1.MEM_BUS_KEY_NUM = Q2.memid
-        where substr(Q1.MEM_BUS_KEY_NUM, 1, 3) = 'MEM'
-        union 
-        select MEM_BUS_KEY_NUM, eff_dt, term_dt
-        from edwp.mem_prov_asgnmt_hist
-        where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
-    ) P
-    where date_part('year', P.term_dt)=2017
-    --1115730, well short of the 2M I expected; waiting for table ingestions to use Kenyon's query suggestion
-) D
 ;
 
 /*
@@ -266,51 +245,4 @@ CLEAN UP
 -- drop table if exists nathalie.nathalie.prjrea_step7_hospitals;
 -- drop table if exists nathalie.prjrea_step8_snf;
 -- drop table if exists nathalie.prjrea_step9_postdischargesnf;
-
-/*
-SIZE OF MEMBERSHIP: 
-*/
-
-select count(distinct P.cin_no) as lacare_members_this_period
-from 
-(
-    select Q2.carriermemid as cin_no, Q1.eff_dt, Q1.term_dt
-    from 
-    edwp.mem_prov_asgnmt_hist as Q1
-    left join 
-    plandata.enrollkeys as Q2
-    on Q1.MEM_BUS_KEY_NUM = Q2.memid
-    where substr(Q1.MEM_BUS_KEY_NUM, 1, 3) = 'MEM'
-    union 
-    select MEM_BUS_KEY_NUM, eff_dt, term_dt
-    from edwp.mem_prov_asgnmt_hist
-    where substr(MEM_BUS_KEY_NUM, 1, 3) != 'MEM'
-) P
-where date_part('year', P.term_dt)=2017
---1115730, well short of the 2M I expected
-
---Kenyon says: use EDWBTI.FACT_MTHLY_MEMSHP_QNXT
-select count(*)
-    -- A.DT_ID, C.DT_DD_MON_YY as RPT_MO 
-    -- ,D.PROV_BUS_KEY_NUM AS PPG_CD, D.ENTY_PROV_NM AS PPG_DESC, '-' AS SEGMT_CD
-    -- -- , B.PLN_PRTNR_DESC AS PRODUCT
-    -- , COUNT(DISTINCT A.CIN) MEMBERS
-    -- , 'FACT_MTHLY_MEMSHP_QNXT' as "SOURCE"  
-from EDWP.FACT_MTHLY_MEMSHP_QNXT A
-JOIN EDWP.DIM_CAL C ON C.DT_ID = cast(A.DT_ID as double) AND DAY_OF_MO = 1
--- JOIN EDWP.DIM_ACT_TYPE ACT ON  A.ACT_TYPE_ID = ACT.ACT_TYPE_ID
--- JOIN EDWP.DIM_PLN_PRTNR B ON B.PLN_PRTNR_ID = A.PLN_PRTNR_ID
-LEFT JOIN EDWP.VW_PPG D ON D.PPG_PROV_ID  = A.PPG_PROV_ID
-LEFT JOIN EDWP.DIM_LOB E ON E.LOB_NM = A.LOB_BUS_KEY_NM
-
-where 1=1
--- AND ACT.ACT_TYPE_DESC in ('New','Continuing')
-AND A.LOB_BUS_KEY_NM <> 'PGM0000000023' /*exclude dup CMC members*/
-AND A.DT_ID >='20180101' -- w/o group by below, tot membersghip is 20265284
-GROUP BY A.DT_ID, C.DT_DD_MON_YY,D.PROV_BUS_KEY_NUM, D.ENTY_PROV_NM
---, /*'' AS SEGMT_CD,*/ B.PLN_PRTNR_DESC
-
-select typeof(dt_id) from EDWP.DIM_CAL
-select typeof(dt_id) from EDWP.FACT_MTHLY_MEMSHP_QNXT
-
 
