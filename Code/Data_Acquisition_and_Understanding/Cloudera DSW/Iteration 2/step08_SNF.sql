@@ -1,15 +1,12 @@
 /***
 Title:              step8_SNF
 Description:        Adds member's SNF if the member was housed at a SNF at any time during the 90 d that precede current hospital admit date *OR* after the last 
-                    inpatient discharge, whichever was more recent. If a member is admitted to several SNFs during this period, then each SNF is attached to the 
-                    case that is sent to TABLEAU so that each may share in the responsibility for the readmission. 
+                    inpatient discharge, whichever was more recent.  
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        prjrea_step7_hospitals; WAS: nathalie.prjrea_step4c_PPG 
 Output:             nathalie.prjrea_step8_SNF has most recent SNF. Contains 1 row per inpatient case. This is the file that is being built for modeling purposes. 
-                    -- nathalie.prjrea_tblo_readmit_SNF has several rows per inpatient case when the inpatient case was preceded by several valid SNF admits. 
-                    [Note that unlike other tables meant for Tableau, here: Aggregate tables showing rate by SNF for period of N days preceding readmission 
-                    are computed on the fly in Tableau rather than here]
-Issues:             Alternative coding. An alternative method may be: VIA REFERRALID FIELD IN QNXT. Elected not to do because the method used seemed more direct.
+Issues:             No longer used in dashboards. 
+                    Alternative coding. An alternative method may be: VIA REFERRALID FIELD IN QNXT. Elected not to do because the method used seemed more direct.
                     (Steps in that alt meth: CASE to CLAIM CROSSWALK TABLE; ATTACH REFERRALID and ADMITSOURCE to DATA;
                     select claimid, referralid, admitsource from plandata.claim where [claimid matches one in the case crosswalk table]; ATTACH SNF NAME TO DATA)
 ***/
@@ -160,7 +157,7 @@ from
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
         ) R
         on L.rnstart = R.rnstart
     ) X
@@ -174,13 +171,13 @@ left join
         select L.cin_no, L.provider, L.provider_type, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnend from nathalie.tmp_respaned_input
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) -1 as string)) as rnend from nathalie.tmp_respaned_input
         ) R
-        on L.rnstart = R.rnstart
+        on L.rnend = R.rnend
     ) X
     where d > 1 or d is null
 ) E  
