@@ -175,7 +175,7 @@ left join
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) -1 as string)) as rnend from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) -1 as string)) as rnend from nathalie.tmp_respaned_input
         ) R
         on L.rnend = R.rnend
     ) X
