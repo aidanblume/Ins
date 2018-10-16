@@ -33,12 +33,12 @@ select distinct C.case_id , CD.diag, CD.diagtype, CD.diag_dt
 from NATHALIE.prjrea_step2_readmit_labels as C
 left join 
 ( 
-    -- union of cases across 4 data tables: nathalie.claims_universe and in HOAP, qnxt, clm, enc
+    -- union of cases across 4 data tables: swat.claims_universe and in HOAP, qnxt, clm, enc
     select distinct cin_no, adm_dt, diag, diagtype, diag_dt
     from
     (
         select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, CD.codeid as diag, CD.diagtype, CD.createdate as diag_dt
-        from nathalie.claims_universe as C
+        from swat.claims_universe as C
         left join plandata.claimdiag as CD
         on C.claimid=CD.claimid
         where substr(C.provid,1,1)='H'
@@ -237,29 +237,6 @@ on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
 -- on
 ;
 
--- DELETE WHEN NARENDRA CONFIRMS CREATION OF REPLACEMENT TABLE
--- create table nathalie.prjrea_case_diag 
--- as
--- select Ca.*
---     , LACE.comorbid_lace 
--- from nathalie.tmp_case_diag as Ca
--- left join
--- (
---     -- ENGINEER LACE COMORBIDITIES
---     select A.case_id, A.diag, B.comorbid_lace
---     from nathalie.tmp_case_diag  as A
---     join nathalie.icd10_lacecomorbidity_crosswalk as B
---     on A.diag=B.code
--- ) as LACE
--- on Ca.case_id=LACE.case_id and Ca.diag=LACE.diag
--- -- left join
--- -- (
--- --     -- ENGINEER HEDIS DIAGNOSTIC CATEGORIES
--- -- ) as HEDIS
--- -- on
--- ;
-
-
 /***
 **
 ** ATTACH FIELD TO THE ANALYTIC SET
@@ -391,8 +368,6 @@ create table nathalie.prjrea_step3_diagnoses
 as
 select * from nathalie.tmp_lace
 ;
-
-
 
 
 
