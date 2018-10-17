@@ -5,13 +5,11 @@ Description:        Generates a data set of acute inpatient cases (=stays) from 
                     Is 1st step in generating analytic data sets for readmission rate computation.
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Sources:       swat.claims_universe
-                    HOAP.HOA QNXT, CLM and ENC case tables. [Will be replaced with enc tables that source HOAP]
+                    HOAP.HOA QNXT, CLM and ENC case tables. 
 Output:             NATHALIE.prjrea_step1_inpatient_cases
 Notes:              1. Inpatient cases are identified with 'where srv_cat = '01ip_a' for HOAP source. This excludes more SNF inpatient stays than using substr(type_bill,1,2) in ('11','12') on the hdr files.
                     2. Unique tupple (cin_no, admi_dt) are selected with priority (1) later disc_dt, and (2) QNXT>CLM>ENC ** Note that this departs from the SAS script received in 2017.
                     3. Provider is not used to individuate cases. The 'Provider' field is in fact 'last provider' in cases where more than one provider attendedto the member during a case. 
-                    4. Assumes that claims and encounters have non-null providers. Assumes that either admit date or discharge date or both are populated.
-                    5. Corrects discharge date < admit date by converting discharge date to admit date. If one is null, populates it with th esame value as the other.
 ***/
 
 /*
@@ -79,13 +77,30 @@ from
                 --     when dis_status='64' then 'Mdcare Ltc Facility'
                 --     when dis_status='65' then 'Psy Hospita'
            --     end as dis_status
-        , provider, case when from_er='Y' then 1 else 0 end as from_er
-        , 3 as source_table
-        from hoap.ENC_CASE_INPSNF as E
+            , provider, case when from_er='Y' then 1 else 0 end as from_er
+            , 3 as source_table
+        from hoap.ENC_CASE_INPSNF as E 
         where srv_cat = '01ip_a'
+        and bp_code<>'TZGQ' 
+        union
+        select case_id, adm_dt as startdate, dis_dt as enddate, cin_no, dis_status
+            , provider, case when from_er='Y' then 1 else 0 end as from_er
+            , 3 as source_table
+        from hoap.ENC_CASE_INPSNF as E
+        -- on Chee's recommendation (see pull request https://dsghe.lacare.org/nblume/Readmissions/pull/72) remove enc records already captured by qnxt (flag  bp_code='TZGQ') since qnxt is the source of truth on tehse records, and HOAP etl appears to have introduced date errors. 
+        left anti join 
+        (
+            select startdate, enddate, carriermemid as cin_no
+            from swat.claims_universe
+            where substr(provid,1,1)='H'
+            and billtype2='IP-Hosp'
+        ) EXCLUDE
+        on E.cin_no=EXCLUDE.cin_no and to_date(E.adm_dt)=to_date(EXCLUDE.startdate)
+        where E.srv_cat = '01ip_a'
+        and E.bp_code = 'TZGQ' 
    ) AS PIECES
    where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
-   and provider not in (select provid from nathalie.ltach) -- filters out both null providers and ltachs. Could be a problem if null provider extends LOS. Unavoidable as Impala restricts use of subqueries to point where 'or is not null' cannot be added here. 
+  and provider not in (select provid from swat.ltach) -- filters out both null providers and ltachs. Could be a problem if null provider extends LOS. Unavoidable as Impala restricts use of subqueries to point where 'or is not null' cannot be added here. 
 ) PIECES_PARTITIONED
 ;
 
@@ -228,7 +243,7 @@ select CASES.case_id
     , CASES.cin_no
     , CASES.adm_dt
     , CASES.dis_dt
-    , 1+datediff(CASES.dis_dt, CASES.adm_dt) as LOS
+    , datediff(CASES.dis_dt, CASES.adm_dt) as LOS
     , MOST_RECENT.provider
     , MOST_RECENT.source_table
     , MAX_VALUE.from_er
