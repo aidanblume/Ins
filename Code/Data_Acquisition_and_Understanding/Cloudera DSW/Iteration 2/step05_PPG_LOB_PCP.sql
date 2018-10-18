@@ -11,6 +11,7 @@ Data Source:        nathalie.prjrea_step4_procedures
                     HOAP.memmo
 Output:             nathalie.prjrea_step5_PPG_LOB_PCP
 Notes:              Can be improved by bringing in pcp info. Search below for /*TK HERE YOU HAVE OPPORTUNITY TO BRING IN PCP
+
 ***/
 
 -- get enrollkey line with enrollid, ratecode, eff & term dates
@@ -62,13 +63,39 @@ left join
     select case_id, segment
     from 
     (
+        -- select case_id, segment, row_number() over (partition by case_id order by priority) as rn
         select case_id, segment, row_number() over (partition by case_id order by priority) as rn
         from 
         (
         
-            --1) via HOAP.MEMMO (preference given on Amy White's advice)
+            -- --1) via HOAP.MEMMO (preference given on Amy White's advice)
         
-            select case_id, segment, 1 as priority
+            -- select case_id, segment, 1 as priority
+            -- from 
+            -- (
+            --     select 
+            --         Ca.case_id
+            --         , MEMMO.segment
+            --         , row_number() over(partition by Ca.case_id order by MEMMO.process_date desc) as rn
+            --     from
+            --     (
+            --         select cin_no, case_id, concat(cast(date_part('year', adm_dt) as varchar(4)), lpad(cast(date_part('month', adm_dt) as varchar(4)), 2, '0')) as adm_yearmth
+            --         from
+            --         nathalie.prjrea_step4_procedures 
+            --     ) Ca 
+            --     left join
+            --     (
+            --         select segment, cin_no, yearmth, process_date
+            --         from HOAP.memmo
+            --     ) as MEMMO
+            --     on Ca.cin_no = MEMMO.cin_no
+            --     and Ca.adm_yearmth = MEMMO.yearmth
+            -- ) S
+            -- where rn = 1
+ 
+            --1) via edwp.mthly_memshp (preference given on Amy White's advice; table that is an updated and improved version of hoap.memmo)
+        
+            select case_id, segment, case when segment is not null then 1 else 3 end as priority
             from 
             (
                 select 
@@ -83,19 +110,19 @@ left join
                 ) Ca 
                 left join
                 (
-                    select segment, cin_no, yearmth, process_date
-                    from HOAP.memmo
+                    select sgmnt as segment, cin_no, mth_id as yearmth, updt_dt as process_date
+                    from edwp.mthly_memshp
                 ) as MEMMO
                 on Ca.cin_no = MEMMO.cin_no
                 and Ca.adm_yearmth = MEMMO.yearmth
             ) S
             where rn = 1
-    
+
             union
             
             --2) via ENROLLKEY (for instances with multiple matching enrollkey rows, keep the enrollkeys row with the latest `lastupdate` and 'createdate' timestamps)
     
-            select case_id, segment, 2 as priority
+            select case_id, segment, case when segment is not null then 2 else 3 end as priority
             from   
             (
                 select 
@@ -141,7 +168,47 @@ left join
         from 
         (
 
-            --1) via ENROLLKEY and plandata
+            -- --1) via MEMMO
+            
+            -- select case_id, lob, product_name, case when lob is null then 3 else 1 end as priority --if null, drop priority
+            -- from 
+            -- (
+            --     select Ca.case_id
+            --         -- , MEMMO.product_code as lob
+            --         , case
+            --             when MEMMO.product_code in ('90', 'COVERED CALIFORNIA', 'LA CARE COVERED DIRECT', 'LA Care Covered/Health Benefits Exchange') then 'LACC'
+            --             when MEMMO.product_code in ('80', 'CMC SPONSOR', 'Cal-Medi Connect (CMC)') then 'CMC'
+            --             when MEMMO.product_code in ('KAIS', 'KAISER PERMANENTE') then 'KAIS'
+            --             when MEMMO.product_code in ('BCSC', 'ANTHEM BLUE CROSS OF CA MEDI-CAL') then 'BCSC'
+            --             when MEMMO.product_code in ('CFST', 'CARE 1ST HEALTH PLAN MEDI-CAL') then 'CFST'
+            --             when MEMMO.product_code in ('10', 'MCLA', 'MCLA-MCE', 'MCLA-CCI', 'MCLA-TANF', 'MCLA-SPD', 'MCLA') then 'MCLA'
+            --             when MEMMO.product_code in ('40', 'PASC-SEIU') then 'PASC-SEIU'
+            --             when MEMMO.product_code in ('60', 'Healthy Kids') then 'Healthy Kids'
+            --             when MEMMO.product_code in ('Healthy Family Plan', 'Other', 'Dual Eligible Special Needs Plan') then MEMMO.product_code
+            --             else null
+            --           end as lob
+            --         , lob.output as product_name
+            --         , row_number() over(partition by Ca.case_id order by MEMMO.process_date desc) as rn
+            --     from
+            --     (
+            --         select cin_no, case_id, concat(cast(date_part('year', adm_dt) as varchar(4)), lpad(cast(date_part('month', adm_dt) as varchar(4)), 2, '0')) as adm_yearmth
+            --         from
+            --         nathalie.prjrea_step4_procedures 
+            --     ) Ca 
+            --     left join
+            --     (
+            --         select product_code, cin_no, yearmth, process_date
+            --         from HOAP.memmo
+            --     ) as MEMMO
+            --     on Ca.cin_no = MEMMO.cin_no
+            --     and Ca.adm_yearmth = MEMMO.yearmth
+            --     left join nathalie.ref_lob as lob
+            --     on memmo.product_code = lob.input
+            -- ) S
+            -- where rn = 1
+            
+            
+            --1) via edwp.mthly_memshp (replaces hoap.MEMMO)
             
             select case_id, lob, product_name, case when lob is null then 3 else 1 end as priority --if null, drop priority
             from 
@@ -170,8 +237,8 @@ left join
                 ) Ca 
                 left join
                 (
-                    select product_code, cin_no, yearmth, process_date
-                    from HOAP.memmo
+                    select lob_cd as product_code, cin_no, mth_id as yearmth, updt_dt as process_date
+                    from edwp.mthly_memshp
                 ) as MEMMO
                 on Ca.cin_no = MEMMO.cin_no
                 and Ca.adm_yearmth = MEMMO.yearmth
@@ -187,7 +254,7 @@ left join
             select case_id
                 , lob1 as lob
                 , product_name
-                , 2 as priority
+                , case when lob1 is null then 3 else 2 end as priority 
             from   
             (
                 select 
@@ -259,7 +326,7 @@ left join
             --1) via ENROLLKEY and plandata
             
 
-            select case_id, ppg, ppg_name, 1 as priority
+            select case_id, ppg, ppg_name, case when ppg is null then 3 else 1 end as priority
             from 
             (
                 select Ca.case_id
@@ -295,7 +362,7 @@ left join
 
             --2) via ENROLLKEY and plandata
 
-            select case_id, ppg, ppg_name, 2 as priority
+            select case_id, ppg, ppg_name, case when ppg is null then 3 else 2 end as priority
             from   
             (
                 select 
