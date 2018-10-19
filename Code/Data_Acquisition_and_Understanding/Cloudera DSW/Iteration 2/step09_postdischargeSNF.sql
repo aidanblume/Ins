@@ -13,6 +13,9 @@ Issues:             In the future, an analytic file may be generated where acute
 Create SNF, LTC and SA cases.
 */
 
+select count(*) from nathalie.tmp_raw_input
+
+
 drop table if exists nathalie.tmp_raw_input
 ;
 
@@ -141,6 +144,14 @@ on SD.cin_no=ED.cin_no and SD.rnsd=ED.rned
 ;
 
 
+-- ---debug
+-- create table nathalie.tmp_debug as select * from nathalie.tmp_respaned_input where cin_no in ('90000855C','90001431D')
+-- drop table nathalie.tmp_respaned_input;
+-- create table nathalie.tmp_respaned_input as select * from nathalie.tmp_debug;
+-- select * from nathalie.tmp_respaned_input
+-- ---
+
+
 --Group claims into cases
 
 drop table if exists nathalie.tmp_cases
@@ -148,7 +159,7 @@ drop table if exists nathalie.tmp_cases
 
 create table nathalie.tmp_cases
 as
-select cin_no, provider, provider_type, adm_dt, dis_dt
+select concat(cin_no, provider, provider_type, '_', to_date(adm_dt)) as case_id, cin_no, provider, provider_type, adm_dt, dis_dt
 from
 (
     select cin_no, provider, provider_type, adm_dt, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) as string)) as rnlink
@@ -157,11 +168,11 @@ from
         select L.cin_no, L.provider, L.provider_type, L.adm_dt as adm_dt, datediff(L.adm_dt, R.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by adm_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input    
         ) L   
         left join
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnstart from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) + 1 as string)) as rnstart from nathalie.tmp_respaned_input   
         ) R
         on L.rnstart = R.rnstart
     ) X
@@ -175,7 +186,7 @@ left join
         select L.cin_no, L.provider, L.provider_type, L.dis_dt as dis_dt, datediff(R.adm_dt, L.dis_dt) as d 
         from 
         (
-            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnend from nathalie.tmp_respaned_input
+            select *, concat(cin_no, provider, provider_type, cast(row_number() over (partition by cin_no, provider, provider_type order by dis_dt asc) as string)) as rnend from nathalie.tmp_respaned_input   
         ) L   
         left join
         (
