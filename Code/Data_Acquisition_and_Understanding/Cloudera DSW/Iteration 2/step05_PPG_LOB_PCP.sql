@@ -11,7 +11,6 @@ Data Source:        nathalie.prjrea_step4_procedures
                     HOAP.memmo
 Output:             nathalie.prjrea_step5_PPG_LOB_PCP
 Notes:              Can be improved by bringing in pcp info. Search below for /*TK HERE YOU HAVE OPPORTUNITY TO BRING IN PCP
-
 ***/
 
 -- get enrollkey line with enrollid, ratecode, eff & term dates
@@ -59,7 +58,7 @@ left join
     Two methods are used, one that aligns with claims_universe and the other with EDW guidelines as I currently understand them.
     Priority is given to the EDW approach. Note also that I departed from the claims_universe approach by including segment values for any LOS and not just MCLA. 
     */
-    
+
     select case_id, segment
     from 
     (
@@ -68,34 +67,9 @@ left join
         from 
         (
         
-            -- --1) via HOAP.MEMMO (preference given on Amy White's advice)
-        
-            -- select case_id, segment, 1 as priority
-            -- from 
-            -- (
-            --     select 
-            --         Ca.case_id
-            --         , MEMMO.segment
-            --         , row_number() over(partition by Ca.case_id order by MEMMO.process_date desc) as rn
-            --     from
-            --     (
-            --         select cin_no, case_id, concat(cast(date_part('year', adm_dt) as varchar(4)), lpad(cast(date_part('month', adm_dt) as varchar(4)), 2, '0')) as adm_yearmth
-            --         from
-            --         nathalie.prjrea_step4_procedures 
-            --     ) Ca 
-            --     left join
-            --     (
-            --         select segment, cin_no, yearmth, process_date
-            --         from HOAP.memmo
-            --     ) as MEMMO
-            --     on Ca.cin_no = MEMMO.cin_no
-            --     and Ca.adm_yearmth = MEMMO.yearmth
-            -- ) S
-            -- where rn = 1
- 
-            --1) via edwp.mthly_memshp (preference given on Amy White's advice; table that is an updated and improved version of hoap.memmo)
-        
-            select case_id, segment, case when segment is not null then 1 else 3 end as priority
+            --1) via edwp.mthly_memshp; priority = '2'
+
+            select case_id, segment, case when segment is not null then 2 else 3 end as priority
             from 
             (
                 select 
@@ -121,8 +95,8 @@ left join
             union
             
             --2) via ENROLLKEY (for instances with multiple matching enrollkey rows, keep the enrollkeys row with the latest `lastupdate` and 'createdate' timestamps)
-    
-            select case_id, segment, case when segment is not null then 2 else 3 end as priority
+
+            select case_id, segment, case when segment is not null then 1 else 3 end as priority
             from   
             (
                 select 
@@ -206,11 +180,10 @@ left join
             --     on memmo.product_code = lob.input
             -- ) S
             -- where rn = 1
+
+            --1) via edwp.mthly_memshp (replaces hoap.MEMMO); now has lower priority '2'
             
-            
-            --1) via edwp.mthly_memshp (replaces hoap.MEMMO)
-            
-            select case_id, lob, product_name, case when lob is null then 3 else 1 end as priority --if null, drop priority
+            select case_id, lob, product_name, case when lob is null then 3 else 2 end as priority
             from 
             (
                 select Ca.case_id
@@ -249,14 +222,14 @@ left join
 
             union
 
-            --2) via ENROLLKEY and plandata. TK removed row_order. Bring it back?
+            --2) via ENROLLKEY and plandata. Now has higher priority
         
             select case_id
                 , lob1 as lob
                 , product_name
-                , case when lob1 is null then 3 else 2 end as priority 
+                , case when lob1 is null then 3 else 1 end as priority 
             from   
-            (
+            ( 
                 select 
                     ca.case_id
                     , case
@@ -280,7 +253,6 @@ left join
                         when trim(eo.fullname) in ('Healthy Family Plan', 'PASC-SEIU', 'Healthy Kids', 'Other', 'Dual Eligible Special Needs Plan') then trim(eo.fullname)
                         else trim(eo.fullname)
                     end as product_name
-
                     , row_number() over (partition by ca.case_id order by ek.lastupdate desc, ek.createdate desc) as rn
                     -- where lob='MCLA' and segment in ('CCI','MCE','TANF','SPD') -- same as in claims_universe; why limit to MCLA, though? Similar segment vals are found under BCBS, CFST, COMM, KAIS lobs
                 from nathalie.prjrea_step4_procedures as ca
@@ -323,8 +295,7 @@ left join
         from 
         (
  
-            --1) via ENROLLKEY and plandata
-            
+            --1) via edwp.mem_prov_asgnmt_hist
 
             select case_id, ppg, ppg_name, case when ppg is null then 3 else 1 end as priority
             from 
@@ -357,7 +328,6 @@ left join
             ) S
             where rownumber2 = 1
 
-            
             union  
 
             --2) via ENROLLKEY and plandata
