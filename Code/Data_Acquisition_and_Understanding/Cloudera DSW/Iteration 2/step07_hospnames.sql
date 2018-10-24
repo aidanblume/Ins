@@ -27,7 +27,7 @@ as
 select *
 from 
 (
-    select *, provider as provider2 from nathalie.prjrea_step6_demog  where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854') or provider is null)
+    select *, provider as provider2 from nathalie.prjrea_step6_demog  where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854', 'H0001716', 'H0002048') or provider is null)
     union
     select *, 'H0000109' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011079')
     union
@@ -37,9 +37,12 @@ from
     union
     select *, 'H0000006' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011293')
     union
+    select *, 'H0001716' as provider2 from nathalie.prjrea_step6_demog where provider in ('H0000084')
+    union
+    select *, 'H0002048' as provider2 from nathalie.prjrea_step6_demog where provider in ('H0000336')
+    union
     select *, null as provider2 from nathalie.prjrea_step6_demog where provider in ('A0012854')
 ) as S
-where provider <> 'A0012854' -- this id is void / in error. 29 rows affected and all those were for adm_dt in 2014-15.
 ;
 
 drop table if exists nathalie.prjrea_step7_hospitals
