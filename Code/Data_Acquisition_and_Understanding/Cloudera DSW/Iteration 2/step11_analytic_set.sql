@@ -64,7 +64,7 @@ FROM
         , uniquemember_postdischargesnfltcsa_admitsthismonth, uniquemember_postdischargesnfltcsa_admitsthisperiod 
         , count_prior6m_er
         , from_er
-        , adm_dt, dis_dt, los, hospname, dis_status
+        , adm_dt, dis_dt, los, provider_correct as provider, hospname, dis_status
         , days_until_next_admit, subsequent_stay_case_id, subsequent_stay_los, is_a_30d_death
         , case 
                 when days_until_next_admit <= 3 then 1  
