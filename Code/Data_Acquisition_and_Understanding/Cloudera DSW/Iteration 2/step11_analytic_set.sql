@@ -236,13 +236,12 @@ HEDIS --- to do
 CLEAN UP
 */ 
 
--- drop table if exists nathalie.prjrea_step1_inpatient_cases; 
--- drop table if exists nathalie.prjrea_step2_readmit_labels;
--- drop table if exists nathalie.nathalie.prjrea_step3_diagnoses ;
--- drop table if exists nathalie.nathalie.prjrea_step4_procedures ;
--- drop table if exists nathalie.nathalie.prjrea_step5_ppg_lob_pcp ;
--- drop table if exists nathalie.nathalie.prjrea_step6_demog ; 
--- drop table if exists nathalie.nathalie.prjrea_step7_hospitals;
--- drop table if exists nathalie.prjrea_step8_snf;
--- drop table if exists nathalie.prjrea_step9_postdischargesnf;
-
+drop table if exists nathalie.prjrea_step1_inpatient_cases; 
+drop table if exists nathalie.prjrea_step2_readmit_labels;
+drop table if exists nathalie.prjrea_step3_diagnoses ;
+drop table if exists nathalie.prjrea_step4_procedures ;
+drop table if exists nathalie.prjrea_step5_ppg_lob_pcp ;
+drop table if exists nathalie.prjrea_step6_demog ; 
+drop table if exists nathalie.prjrea_step7_hospitals;
+drop table if exists nathalie.prjrea_step8_snf;
+drop table if exists nathalie.prjrea_step9_postdischargesnf;
