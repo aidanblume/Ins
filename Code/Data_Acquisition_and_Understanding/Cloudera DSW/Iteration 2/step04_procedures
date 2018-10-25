@@ -30,12 +30,40 @@ left join
     select distinct cin_no, adm_dt, proc
     from
     (
+    
+    -- create table nathalie.tmp_servcode
+    -- as
         select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CD.servcode='' then null else CD.servcode end as proc
         from swat.claims_universe as C
         left join plandata.claimdetail as CD
         on C.claimid=CD.claimid
         where substr(C.provid,1,1)='H'
         and C.billtype2='IP-Hosp'
+        
+        
+    --     -- TK: proposed change
+        
+    -- create table nathalie.tmp_claimproc
+    -- as        
+    --     select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CD.servcode='' then null else CD.servcode end as proc
+    --     from swat.claims_universe as C
+    --     left join plandata.claimproc as CD -- not yet in hue = icd10 procedures from qnxt
+    --     on C.claimid=CD.claimid -- possibly codeid as field
+    --     where substr(C.provid,1,1)='H'
+    --     and C.billtype2='IP-Hosp'
+        
+    --     WAITING for resolution to https://dsghe.lacare.org/bshelton/DataSciencePlatform-SourceData/issues/21
+    --     before figuring out which field to use, and then do analysis to make sure you're approaching this switch correctly. 
+       
+    --     select * from plandata.claimproc limit 10;
+        
+    --     select count(*) from nathalie.tmp_servcode where proc is null; --2294203
+    --     select count(*) from nathalie.tmp_servcode where proc is not null; --22023
+    --     select distinct proc from nathalie.tmp_servcode where proc is not null; --22023
+        
+        
+    --     -------
+        
         union
         select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
         from hoap.clm_case_inpsnf
@@ -178,3 +206,4 @@ left join
 ) S
 on Ca.case_id=S.case_id
 ;
+
