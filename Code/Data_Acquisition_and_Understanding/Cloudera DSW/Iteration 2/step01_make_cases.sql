@@ -53,6 +53,8 @@ from
             , 2 as source_table
         from hoap.clm_case_inpsnf as C
         where srv_cat = '01ip_a'
+        --remove all rows sourced from QNXT (unnecessary with clm but makes logic consistent across HOAP-sourced code blocks)
+        and bp_code<>'TZGQ' 
         union
         select case_id, adm_dt as startdate, dis_dt as enddate, cin_no, dis_status
                 -- case 
@@ -81,23 +83,8 @@ from
             , 3 as source_table
         from hoap.ENC_CASE_INPSNF as E 
         where srv_cat = '01ip_a'
-        and bp_code<>'TZGQ' 
-        union
-        select case_id, adm_dt as startdate, dis_dt as enddate, cin_no, dis_status
-            , provider, case when from_er='Y' then 1 else 0 end as from_er
-            , 3 as source_table
-        from hoap.ENC_CASE_INPSNF as E
-        -- on Chee's recommendation (see pull request https://dsghe.lacare.org/nblume/Readmissions/pull/72) remove enc records already captured by qnxt (flag  bp_code='TZGQ') since qnxt is the source of truth on tehse records, and HOAP etl appears to have introduced date errors. 
-        left anti join 
-        (
-            select startdate, enddate, carriermemid as cin_no
-            from swat.claims_universe
-            where substr(provid,1,1)='H'
-            and billtype2='IP-Hosp'
-        ) EXCLUDE
-        on E.cin_no=EXCLUDE.cin_no and to_date(E.adm_dt)=to_date(EXCLUDE.startdate)
-        where E.srv_cat = '01ip_a'
-        and E.bp_code = 'TZGQ' 
+        --remove all rows sourced from QNXT
+        and bp_code<>'TZGQ'
    ) AS PIECES
    where (startdate is not null or enddate is not null) -- filter out cases where both dates are null
   and provider not in (select provid from swat.ltach) -- filters out both null providers and ltachs. Could be a problem if null provider extends LOS. Unavoidable as Impala restricts use of subqueries to point where 'or is not null' cannot be added here. 
@@ -279,7 +266,6 @@ left join
 ) MAX_VALUE
 on CASES.case_id=MAX_VALUE.case_id
 ;
-
 
 /*
 CLEAN UP
