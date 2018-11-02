@@ -230,7 +230,7 @@ select CASES.case_id
     , CASES.cin_no
     , CASES.adm_dt
     , CASES.dis_dt
-    , datediff(CASES.dis_dt, CASES.adm_dt) as LOS
+    , datediff(CASES.dis_dt, CASES.adm_dt) +1 as LOS
     , MOST_RECENT.provider
     , MOST_RECENT.source_table
     , MAX_VALUE.from_er
