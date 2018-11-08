@@ -15,6 +15,12 @@ Notes:              1. Inpatient cases are identified with 'where srv_cat = '01i
 /*
 PRJREA_CASE_PROC
 Purpose:    To create a relationship table that links cases to procedures
+
+
+
+TK need to either transpate all tmp_case_proc codes (in ICD10) to CPT system, then compare to HEDIS values set (in CPT),
+or draw codes fromk LA Care's plandata.claimdetail for swat_universe (CPT) and from some yet-unknown-source for HOAP (need CPT).
+
 */
 
 drop table if exists nathalie.tmp_case_proc
@@ -30,120 +36,110 @@ left join
     select distinct cin_no, adm_dt, proc
     from
     (
-    
-    -- create table nathalie.tmp_servcode
-    -- as
+        -- For CPT/HCPCS procedure codes
         select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CD.servcode='' then null else CD.servcode end as proc
         from swat.claims_universe as C
         left join plandata.claimdetail as CD
         on C.claimid=CD.claimid
         where substr(C.provid,1,1)='H'
         and C.billtype2='IP-Hosp'
-        
-        
-    --     -- TK: proposed change
-        
-    -- create table nathalie.tmp_claimproc
-    -- as        
-    --     select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CD.servcode='' then null else CD.servcode end as proc
-    --     from swat.claims_universe as C
-    --     left join plandata.claimproc as CD -- not yet in hue = icd10 procedures from qnxt
-    --     on C.claimid=CD.claimid -- possibly codeid as field
-    --     where substr(C.provid,1,1)='H'
-    --     and C.billtype2='IP-Hosp'
-        
-    --     WAITING for resolution to https://dsghe.lacare.org/bshelton/DataSciencePlatform-SourceData/issues/21
-    --     before figuring out which field to use, and then do analysis to make sure you're approaching this switch correctly. 
-       
-    --     select * from plandata.claimproc limit 10;
-        
-    --     select count(*) from nathalie.tmp_servcode where proc is null; --2294203
-    --     select count(*) from nathalie.tmp_servcode where proc is not null; --22023
-    --     select distinct proc from nathalie.tmp_servcode where proc is not null; --22023
-        
-        
-    --     -------
-        
+        -- --For ICD 10 procedure codes
+        -- select C.claimid, C.carriermemid as cin_no, C.startdate as adm_dt, case when CP.pcode='' then null else CP.pcode end as proc
+        -- from swat.claims_universe as C
+        -- left join plandata.claimproc as CP --ICD10 codes
+        -- on C.claimid=CP.claimid
+        -- where substr(C.provid,1,1)='H'
+        -- and C.billtype2='IP-Hosp'
         union
-        select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
+        -- For CPT/HCPCS procedure codes (according to HOA dictionary; however there appear to be a preponderance of ICD-10 procedure codes)
+        select cl_id as claimid, cin_no, dos as adm_dt, proc_cd as proc
+        from hoap.clm_detail_inpsnf
+        where srv_cat = '01ip_a' and proc_cd is not null
+        -- --For ICD 10 procedure codes
+        -- select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
+        -- from hoap.clm_case_inpsnf
+        -- where srv_cat = '01ip_a'
         union
-        select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
-        from hoap.clm_case_inpsnf
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
-        union
-        select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
-        from hoap.ENC_CASE_INPSNF
-        where srv_cat = '01ip_a'
+        -- For CPT/HCPCS procedure codes (according to HOA dictionary; however there appear to be a preponderance of ICD-10 procedure codes)
+        select cl_id as claimid, cin_no, dos as adm_dt, proc_cd as proc
+        from hoap.enc_detail_inpsnf
+        where srv_cat = '01ip_a' and proc_cd is not null
+        -- --For ICD 10 procedure codes
+        -- select case_id as claimid, cin_no, adm_dt, case_pr1 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr2 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr3 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr4 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr5 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr6 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr7 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr8 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr9 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
+        -- union
+        -- select case_id as claimid, cin_no, adm_dt, case_pr10 as proc
+        -- from hoap.ENC_CASE_INPSNF
+        -- where srv_cat = '01ip_a'
     ) S
 ) as CP
 on C.cin_no=CP.cin_no
@@ -153,6 +149,9 @@ where CP.adm_dt>=C.adm_dt and CP.adm_dt<=C.dis_dt
 
 /*
 DETERMINE WHETHER THERE WERE SURGERIES< USING NCQA TABLE
+
+Note that the ncqa table uses CPT codes rather than ICD10 codes. If nathalie.tmp_case_proc generates ICD10 codes (there are 2 options in how to generate the table) then these need to be translated into CPT codes. 
+
 */
 
 --relationship table
