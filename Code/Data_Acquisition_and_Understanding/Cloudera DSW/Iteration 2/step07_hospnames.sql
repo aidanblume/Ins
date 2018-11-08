@@ -5,7 +5,7 @@ Description:        Add the name of the hospital providing service (at this time
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        nathalie.prjrea_step6_demog 
                     plandata.provider
-Output:             nathalie.prjrea_step4b_hospitals is the main data set, not aggregated
+Output:             nathalie.prjrea_step7_hospitals is the main data set, not aggregated
                     -- nathalie.prjrea_tblo_index_hospitals: rates are computed over index hospital
                     -- nathalie.prjrea_tblo_readmit_hospitals: rates are computed over readmitting hospital
 Issues:             In QNXT's provider table, the provid field matches many but not all cases.
@@ -14,6 +14,15 @@ Issues:             In QNXT's provider table, the provid field matches many but 
                     that need to be unified into a single 'hospital' group. For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 
                     70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient
                     The fact that there are SNFs indicates that I have a capture problem further upstream.
+
+
+select count(*) from nathalie.prjrea_step6_demog:821605, no nulls
+821574  in hand_corrections; no null provider, provider2 ------> loss of 31
+select count(distinct case_id) from nathalie.prjrea_step6_demog -- 821605
+select count(distinct case_id) from nathalie.prjrea_step7_hospitals -- 821539; so there are 821574-821539=35 rows that duplicate an existing case_id
+select count(*) from nathalie.prjrea_step7_hospitals where hospname is null --31872 WOW
+
+
 ***/ 
 
 --***THIS STEP REQUIRES LOOKING AT THE OUTPUT AND ADJUSTING THE QUERY ACCORDINGLY**
@@ -27,7 +36,8 @@ as
 select *
 from 
 (
-    select *, provider as provider2 from nathalie.prjrea_step6_demog  where (provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854', 'H0001716', 'H0002048') or provider is null)
+    -- select *, provider as provider2 from nathalie.prjrea_step6_demog  where provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854', 'H0000084', 'H0000336')
+    select *, provider as provider2 from nathalie.prjrea_step6_demog  where provider not in ('A0011079', 'H0000553', 'A0004000', 'A0011293', 'A0012854', 'H0000336')
     union
     select *, 'H0000109' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011079')
     union
@@ -37,11 +47,11 @@ from
     union
     select *, 'H0000006' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0011293')
     union
-    select *, 'H0001716' as provider2 from nathalie.prjrea_step6_demog where provider in ('H0000084')
-    union
     select *, 'H0002048' as provider2 from nathalie.prjrea_step6_demog where provider in ('H0000336')
     union
-    select *, null as provider2 from nathalie.prjrea_step6_demog where provider in ('A0012854')
+    select *, 'UNK' as provider2 from nathalie.prjrea_step6_demog where provider in ('A0012854')
+    union
+    select *, 'UNK' as provider2 from nathalie.prjrea_step6_demog where provider is null
 ) as S
 ;
 
@@ -62,8 +72,8 @@ left join
         from
         (
         
-            --Priority/Source 0: provider field is 10 digit NPI (commonly used for encounters), plandata.provider
-            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 0 as source
+            --Priority/Source 1: provider field is 10 digit NPI (commonly used for encounters), plandata.provider
+            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 1 as source
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.npi
@@ -71,7 +81,7 @@ left join
             and B.fullname is not null
             union
         
-            --Priority/Source 1: provider field is 10 digit NPI (commonly used for encounters), encp.mhc_physician
+            --Priority/Source 2: provider field is 10 digit NPI (commonly used for encounters), encp.mhc_physician
             select A.cin_no, A.adm_dt, A.dis_dt
                 , B.ph_id as provider3
                 , case 
@@ -94,7 +104,7 @@ left join
                         when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
                         else concat(trim(B.last_name), trim(B.first_name))
                     end as fullname
-                    , 1 as source
+                    , 2 as source
             from nathalie.hand_corrections as A
             left join encp.mhc_physician as B
             on A.provider2 = B.npi
@@ -103,8 +113,8 @@ left join
             union
 
         
-            --Priority/source 2: provider field matches plandata.provider's provid field.
-            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 2 as source
+            --Priority/source 3: provider field matches plandata.provider's provid field.
+            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 3 as source
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.provid
@@ -121,7 +131,7 @@ left join
             --associated to the same prov code in the reference file. 
             --Recall that: For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital.
             
-            --Priority/source 2: provider field matches encp.mhc_physician's ph_id field and starts with H --> get provider=ph_id and fullname; not that the first_name='2' etc business is to correct data entry anomalies. 
+            --Priority/source 4: provider field matches encp.mhc_physician's ph_id field and starts with H --> get provider=ph_id and fullname; not that the first_name='2' etc business is to correct data entry anomalies. 
             select A.cin_no, A.adm_dt, A.dis_dt, B.ph_id as provider3
                 , case 
                         when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
@@ -143,7 +153,7 @@ left join
                         when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
                         else concat(trim(B.last_name), trim(B.first_name))
                     end as fullname
-                , 3 as source
+                , 4 as source
             from nathalie.hand_corrections as A
             left join encp.mhc_physician as B 
             on A.provider2 = B.ph_id
@@ -151,15 +161,15 @@ left join
             and concat(trim(B.first_name), trim(B.last_name)) is not null  
             union
             
-            -- Priority/source 3: provider field matches plandata.provider's fedid field and the provid corresponding to that provid starts with H --> get provider=provid (via fedid) and fullname.
-            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 4 as source 
+            -- Priority/source 5: provider field matches plandata.provider's fedid field and the provid corresponding to that provid starts with H --> get provider=provid (via fedid) and fullname.
+            select A.cin_no, A.adm_dt, A.dis_dt, B.provid as provider3, B.fullname, 5 as source 
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
             where substring(B.provid, 1, 1) = 'H' 
             union
 
-            --Priority/source 4: provider field matches encp.mhc_physician's fed_taxid field and the ph_id corresponding to that fed_taxid starts with H --> get provider=ph_id (via fed_taxid) and fullname 
+            --Priority/source 6: provider field matches encp.mhc_physician's fed_taxid field and the ph_id corresponding to that fed_taxid starts with H --> get provider=ph_id (via fed_taxid) and fullname 
             select A.cin_no, A.adm_dt, A.dis_dt, B.ph_id as provider3
                 , case 
                         when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
@@ -181,38 +191,38 @@ left join
                         when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
                         else concat(trim(B.last_name), trim(B.first_name))
                     end as fullname
-                , 5 as source 
+                , 6 as source 
             from nathalie.hand_corrections as A
             left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
             where substring(B.ph_id, 1, 1) = 'H' 
             and concat(trim(B.first_name), trim(B.last_name)) is not null  
             union
             
-            --Priority/source 6 through 9: Do not apply 'H' requirement; use plandata.provider
+            --Priority/source 7 through 10: Do not apply 'H' requirement; use plandata.provider
             --For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient The fact that there are SNFs indicates that I have a capture problem further upstream
 
-            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 6 as source
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 7 as source
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
             where B.provtype in ('88') --this is assigned a higher source value to preserve SNF info as much as possible
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 7 as source
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 8 as source
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
             where B.provtype in ('16', '70')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 8 as source
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 9 as source
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
             where B.provtype in ('15', '46')
             and B.fullname is not null
             union
-            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 9 as source -- there is some kind of match to a fullname
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, B.fullname, 10 as source -- there is some kind of match to a fullname
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
@@ -220,7 +230,7 @@ left join
             and B.fullname is not null
             union
             
-            --Priority/source 10 through 11: Do not apply 'H' requirement; use plandata.provider
+            --Priority/source 11 through 12: Do not apply 'H' requirement; use plandata.provider
             
             select A.cin_no, A.adm_dt, A.dis_dt, B.ph_id as provider3
                 , case 
@@ -243,7 +253,7 @@ left join
                         when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
                         else concat(trim(B.last_name), trim(B.first_name))
                     end as fullname
-                , 10 as source
+                , 11 as source
             from nathalie.hand_corrections as A
             left join encp.mhc_physician as B 
             on A.provider2 = B.ph_id
@@ -271,15 +281,15 @@ left join
                         when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
                         else concat(trim(B.last_name), trim(B.first_name))
                     end as fullname
-                , 11 as source 
+                , 12 as source 
             from nathalie.hand_corrections as A
             left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
             where concat(trim(B.first_name), trim(B.last_name)) is not null  
             union
 
-            --Priority/source 12: Last resort, use provider2 as fullname and as provider3
+            --Priority/source 13: Last resort, use provider2 as fullname and as provider3
             
-            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, A.provider2 as fullname, 12 as source -- there is no match to a fullname, but A.provider may not be null
+            select cin_no, A.adm_dt, A.dis_dt, A.provider2 as provider3, A.provider2 as fullname, 13 as source -- there is no match to a fullname, but A.provider may not be null
             from nathalie.hand_corrections as A
             
         ) S
