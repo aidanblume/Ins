@@ -22,6 +22,7 @@ as
 select 
     A.*
     , seg.segment as segment
+    , seg.segtype
     , lob.lob as lob
     , lob.product_name as product_name
     , ppg.ppg as ppg
@@ -59,22 +60,23 @@ left join
     Priority is given to the EDW approach. Note also that I departed from the claims_universe approach by including segment values for any LOS and not just MCLA. 
     */
 
-    select case_id, segment
+    select case_id, segment, segtype
     from 
     (
         -- select case_id, segment, row_number() over (partition by case_id order by priority) as rn
-        select case_id, segment, row_number() over (partition by case_id order by priority) as rn
+        select case_id, segment, segtype, row_number() over (partition by case_id order by priority) as rn
         from 
         (
         
             --1) via edwp.mthly_memshp; priority = '2'
 
-            select case_id, segment, case when segment is not null then 2 else 3 end as priority
+            select case_id, segment, null as segtype, case when segment is not null then 2 else 3 end as priority
             from 
             (
                 select 
                     Ca.case_id
                     , MEMMO.segment
+                    , null as segtype -- segtype is used in next block (2) to determine whether int or ext (if ext, segtype explains why segment is null even when member has LOB=MCLA). Here (in block 1) there is no segtype field from which the information may be drawn.
                     , row_number() over(partition by Ca.case_id order by MEMMO.process_date desc) as rn
                 from
                 (
@@ -93,23 +95,22 @@ left join
             where rn = 1
 
             union
-            
+
             --2) via ENROLLKEY (for instances with multiple matching enrollkey rows, keep the enrollkeys row with the latest `lastupdate` and 'createdate' timestamps)
 
-            select case_id, segment, case when segment is not null then 1 else 3 end as priority
+            select case_id, segment, segtype, case when segment is not null then 1 else 3 end as priority
             from   
             (
                 select 
                     ca.case_id
                     , seg.segmtn as segment
-                    , row_number() over (partition by ca.case_id order by ek.lastupdate desc, ek.createdate desc) as rn
-                    -- where seg.lob='MCLA' and segment in ('CCI','MCE','TANF','SPD') -- same as in claims_universe; why limit to MCLA, though? Similar segment vals are found under BCBS, CFST, COMM, KAIS lobs
+                    , ek.segtype 
+                    , row_number() over (partition by ca.case_id order by ek.lastupdate desc, ek.createdate desc, ek.segtype desc) as rn
                 from nathalie.prjrea_step4_procedures as ca
                 left join
                 (
-                    select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid
+                    select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid, segtype
                     from plandata.enrollkeys 
-                    where segtype = 'INT' and ratecode <> 'CMCWELL'
                 ) ek
                 on ca.cin_no = ek.carriermemid
                 and ca.adm_dt >= ek.effdate
@@ -118,6 +119,7 @@ left join
                 on ek.ratecode = seg.grp_cd
             ) S
             where rn = 1
+
             
         ) seg_inner_1
         
@@ -142,47 +144,7 @@ left join
         from 
         (
 
-            -- --1) via MEMMO
-            
-            -- select case_id, lob, product_name, case when lob is null then 3 else 1 end as priority --if null, drop priority
-            -- from 
-            -- (
-            --     select Ca.case_id
-            --         -- , MEMMO.product_code as lob
-            --         , case
-            --             when MEMMO.product_code in ('90', 'COVERED CALIFORNIA', 'LA CARE COVERED DIRECT', 'LA Care Covered/Health Benefits Exchange') then 'LACC'
-            --             when MEMMO.product_code in ('80', 'CMC SPONSOR', 'Cal-Medi Connect (CMC)') then 'CMC'
-            --             when MEMMO.product_code in ('KAIS', 'KAISER PERMANENTE') then 'KAIS'
-            --             when MEMMO.product_code in ('BCSC', 'ANTHEM BLUE CROSS OF CA MEDI-CAL') then 'BCSC'
-            --             when MEMMO.product_code in ('CFST', 'CARE 1ST HEALTH PLAN MEDI-CAL') then 'CFST'
-            --             when MEMMO.product_code in ('10', 'MCLA', 'MCLA-MCE', 'MCLA-CCI', 'MCLA-TANF', 'MCLA-SPD', 'MCLA') then 'MCLA'
-            --             when MEMMO.product_code in ('40', 'PASC-SEIU') then 'PASC-SEIU'
-            --             when MEMMO.product_code in ('60', 'Healthy Kids') then 'Healthy Kids'
-            --             when MEMMO.product_code in ('Healthy Family Plan', 'Other', 'Dual Eligible Special Needs Plan') then MEMMO.product_code
-            --             else null
-            --           end as lob
-            --         , lob.output as product_name
-            --         , row_number() over(partition by Ca.case_id order by MEMMO.process_date desc) as rn
-            --     from
-            --     (
-            --         select cin_no, case_id, concat(cast(date_part('year', adm_dt) as varchar(4)), lpad(cast(date_part('month', adm_dt) as varchar(4)), 2, '0')) as adm_yearmth
-            --         from
-            --         nathalie.prjrea_step4_procedures 
-            --     ) Ca 
-            --     left join
-            --     (
-            --         select product_code, cin_no, yearmth, process_date
-            --         from HOAP.memmo
-            --     ) as MEMMO
-            --     on Ca.cin_no = MEMMO.cin_no
-            --     and Ca.adm_yearmth = MEMMO.yearmth
-            --     left join nathalie.ref_lob as lob
-            --     on memmo.product_code = lob.input
-            -- ) S
-            -- where rn = 1
-
             --1) via edwp.mthly_memshp (replaces hoap.MEMMO); now has lower priority '2'
-            
             select case_id, lob, product_name, case when lob is null then 3 else 2 end as priority
             from 
             (
@@ -215,8 +177,7 @@ left join
                 ) as MEMMO
                 on Ca.cin_no = MEMMO.cin_no
                 and Ca.adm_yearmth = MEMMO.yearmth
-                left join nathalie.ref_lob as lob
-                on memmo.product_code = lob.input
+                left join nathalie.ref_lob as lob on memmo.product_code = lob.input
             ) S
             where rn = 1
 
@@ -253,14 +214,12 @@ left join
                         when trim(eo.fullname) in ('Healthy Family Plan', 'PASC-SEIU', 'Healthy Kids', 'Other', 'Dual Eligible Special Needs Plan') then trim(eo.fullname)
                         else trim(eo.fullname)
                     end as product_name
-                    , row_number() over (partition by ca.case_id order by ek.lastupdate desc, ek.createdate desc) as rn
-                    -- where lob='MCLA' and segment in ('CCI','MCE','TANF','SPD') -- same as in claims_universe; why limit to MCLA, though? Similar segment vals are found under BCBS, CFST, COMM, KAIS lobs
+                    , row_number() over (partition by ca.case_id order by ek.lastupdate desc, ek.createdate desc, ek.segtype desc) as rn
                 from nathalie.prjrea_step4_procedures as ca
                 left join
                 (
                     select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid
                     from plandata.enrollkeys 
-                    where segtype = 'INT' and ratecode <> 'CMCWELL'
                 ) ek
                 on ca.cin_no = ek.carriermemid
                 and ca.adm_dt >= ek.effdate
