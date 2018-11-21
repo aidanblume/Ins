@@ -218,7 +218,7 @@ left join
                 from nathalie.prjrea_step4_procedures as ca
                 left join
                 (
-                    select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid
+                    select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid, segtype
                     from plandata.enrollkeys 
                 ) ek
                 on ca.cin_no = ek.carriermemid
