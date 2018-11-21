@@ -28,20 +28,14 @@ select
     , ppg.ppg as ppg
     , ppg.ppg_name as ppg_name
     , case 
-            when ppg.ppg in ('AVHC','BHC','CTHC','DHHC','ELHC','EMCH',
-                'ERCH','GPHC','HCHC','HDHS','HHHC','HUMC','HUMF','LACU',
-                'LBCH','LCC','LLAC','LPHC','MLKH','OVMC','OVMV','RLAC',
-                'SFHC','SGHC','SPHC','STR','THC','WIHC','WVCH') then 'DHS-PPG' 
+            when dhs.ppg is not null then 'DHS-PPG' 
             else 'Non-DHS PPG'
+        end as DHS_ppg
+    , case  
+            when dhs.primary_hospital_id = 'shared_risk' then 'DHS AV/Shared'
+            when dhs.primary_hospital_id <> 'shared_risk' and dhs.primary_hospital_id is not null then 'DHS Metro/Dual'
+            else 'Non-DHS PPG' 
         end as DHS_site
-    , case
-            when ppg.ppg in ('AVHC','HDHS','LCC','LLAC','SPHC') then 'served by non-DHS facilities' --Shared risk / Antelope Valley PPG members typically go to non-DHS facilities. See email from Brandon Shelton Sent: Friday, August 31, 2018 2:02 PM
-            when ppg.ppg in ('BHC','CTHC','DHHC','ELHC','EMCH',
-                'ERCH','GPHC','HCHC','HDHS','HHHC','HUMC','HUMF','LACU',
-                'LBCH','LPHC','MLKH','OVMC','OVMV','RLAC',
-                'SFHC','SGHC','STR','THC','WIHC','WVCH') then 'served by DHS facilities'            
-            else 'served by non-DHS facilities'
-        end as DHS_service   
     , case
             when product_name='Cal-Medi Connect (CMC)' then 'Medi-Medi'
             when seg.segment in ('CCI') then 'Medi-Medi'
@@ -355,4 +349,7 @@ left join
     
 ) ppg
 on A.case_id = ppg.case_id
+
+left join swat.dhs_facility_assignments as dhs
+on ppg.ppg = dhs.ppg
 ;
