@@ -14,9 +14,6 @@ Issues:             In QNXT's provider table, the provid field matches many but 
                     that need to be unified into a single 'hospital' group. For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 
                     70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient
                     The fact that there are SNFs indicates that I have a capture problem further upstream.
-
-select provider_correct, hospname from nathalie.prjrea_step7_hospitals where hospname like '%RICHARD%'
-select distinct fullname, provid, npi, fedid from plandata.provider where provid='942728480' or npi='942728480' or fedid='942728480'
 ***/ 
 
 --***THIS STEP REQUIRES LOOKING AT THE OUTPUT AND ADJUSTING THE QUERY ACCORDINGLY**
@@ -377,8 +374,8 @@ left join
             and (B.expiration_date is null or B.expiration_date >= now())
             union
             
-            --Priority/source 7 through 10: Do not apply 'H' requirement; use plandata.provider
-            --For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient The fact that there are SNFs indicates that I have a capture problem further upstream
+            --Priority/source 70 through 91: Do not apply 'H' requirement; use plandata.provider
+            --For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient The fact that there are SNFs indicates that I have a capture problem further upstream, 60=County Hospital Outpatient , 61=County Hospital Outpatient 
 
             select A.case_id, A.provider2 as provider3, B.fullname, 70 as source
             from nathalie.hand_corrections as A
@@ -401,7 +398,7 @@ left join
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
-            where B.provtype in ('16', '70')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
+            where B.provtype in ('16', '70', '60')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
             and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
             and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
             and status = 'Active'
@@ -410,7 +407,7 @@ left join
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
-            where B.provtype in ('16', '70')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
+            where B.provtype in ('16', '70', '60')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
             and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
             and status = 'Active'
             union
@@ -418,7 +415,7 @@ left join
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
-            where B.provtype in ('15', '46')
+            where B.provtype in ('15', '46', '61')
             and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
             and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
             and status = 'Active'
@@ -427,7 +424,7 @@ left join
             from nathalie.hand_corrections as A
             left join plandata.provider as B
             on A.provider2 = B.fedid
-            where B.provtype in ('15', '46')
+            where B.provtype in ('15', '46', '61')
             and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
             and status = 'Active'
             union
@@ -472,7 +469,7 @@ left join
             where B.fullname is not null
             union
             
-            --Priority/source 11 through 12: Do not apply 'H' requirement; use plandata.provider
+            --Priority/source 130 through 140: Do not apply 'H' requirement; use encp.mhc_physician
             
             select A.case_id, B.ph_id as provider3
                 , case 
