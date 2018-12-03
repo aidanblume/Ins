@@ -4,11 +4,13 @@ Description:        Adds member's SNF if the member was housed at a SNF at any t
                     and the next inpatient admit, whichever comes first. If a member is admitted to several SNFs during this period, then the last admit is shown. 
 Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Code/Data_Acquisition_and_Understanding/Cloudera%20DSW/Iteration2/
 Data Source:        nathalie.prjrea_step8_outpatient
-Output:             nathalie.prjrea_step9_postDischSNF  
+Output:             nathalie.prjrea_step9_postdischargesnf  
 Issues:             In the future, an analytic file may be generated where acute admits are still unique rows. The post discharge SNF info may be reduced to
                     a column indicating the date of the 1st SNF admit post discharge.
-***/
 
+select * from nathalie.prjrea_step9_postdischargesnf  limit 100;
+***/
+ 
 /*
 Create SNF, LTC and SA cases.
 */
@@ -85,7 +87,8 @@ from
             --     end as SNF_custodialsubaonly_factor --'SNF: Custodial Sub-Acute Only'          
             , 1 as source
         from swat.claims_universe
-        where (ltc_claim = 'yes' or snf_claim = 'yes' or suba_claim = 'yes' or ltach = 'yes')
+        -- where (ltc_claim = 'yes' or snf_claim = 'yes' or suba_claim = 'yes' or ltach = 'yes')
+        where billtype2 = 'SNF-IP' or ltach = 'yes'
 
         union
         
@@ -160,13 +163,15 @@ from
             ) as S1
             left join swat.ltach as LTACH_REF on S1.provider=LTACH_REF.provid
         ) as S2
-        where (substr(S2.type_bill, 1, 2) in ('21', '22') and lpad(S2.rev_cd, 4, '0') in ('0022', '0160', '0191', '0192', '0193', '0194', '0199'))
-        or S2.ltach=1
+        -- where (substr(S2.type_bill, 1, 2) in ('21', '22')  and lpad(S2.rev_cd, 4, '0') in ('0022', '0160', '0191', '0192', '0193', '0194', '0199'))
+        where (substr(S2.type_bill, 1, 2) in ('21', '22')) or S2.ltach=1
+        
 
     ) as S1
 ) as S2
 where rn = 1
 ;
+
 
 /*
 CORRECT PROVIDER SO IT REFLECTS PROVID (ratherthan fedid, npi, etc), and ADD SNF NAMES
@@ -191,9 +196,47 @@ from
     union
     select *, 'H0002048' as provider2 from nathalie.tmp_raw_input where provider in ('H0000336')
     union
-    select *, 'UNK' as provider2 from nathalie.tmp_raw_input where provider in ('A0012854')
+    select *, 'H0002051' as provider2 from nathalie.tmp_raw_input where provider in ('H0000051')
     union
-    select *, 'UNK' as provider2 from nathalie.tmp_raw_input where provider is null
+    select *, 'H0001705' as provider2 from nathalie.tmp_raw_input where provider in ('A0010586')
+    union 
+    select *, 'H0000176' as provider2 from nathalie.tmp_raw_input where provider in ('H0000659')
+    union
+    select *, 'A0008515' as provider2 from nathalie.tmp_raw_input where provider like '%H0000535%'
+    union
+    select *, 'H0000178' as provider2 from nathalie.tmp_raw_input where provider in ('A0011363')
+    union
+    select *, 'H0001981' as provider2 from nathalie.tmp_raw_input where provider in ('H0001465')
+    union
+    select *, 'H0000365' as provider2 from nathalie.tmp_raw_input where provider in ('A0010326')
+    union
+    select *, 'H0001716' as provider2 from nathalie.tmp_raw_input where provider in ('H0000084')
+    union
+    select *, 'H0000480' as provider2 from nathalie.tmp_raw_input where provider in ('H0000544')
+    union
+    select *, 'H0000194' as provider2 from nathalie.tmp_raw_input where provider in ('H0000580')
+    union
+    select *, 'H0000459' as provider2 from nathalie.tmp_raw_input where provider in ('A0006368')
+    union
+    select *, 'H0002159' as provider2 from nathalie.tmp_raw_input where provider in ('A0004180')
+    union
+    select *, 'H0001355' as provider2 from nathalie.tmp_raw_input where provider in ('A0120036')
+    union
+    select *, 'H0000309' as provider2 from nathalie.tmp_raw_input where provider in ('A0009357')
+    union    
+    select *, 'H0000170' as provider2 from nathalie.tmp_raw_input where provider in ('A0011234')
+    union
+    select *, 'H0002338' as provider2 from nathalie.tmp_raw_input where provider in ('A0011359')
+    union
+    select *, 'H0002338' as provider2 from nathalie.tmp_raw_input where provider in ('A0011359')
+    union
+    select *, 'H0000208' as provider2 from nathalie.tmp_raw_input where provider in ('A0011335')
+    union
+    select *, 'A0011294' as provider2 from nathalie.tmp_raw_input where provider in ('A0013227')
+    union
+    select *, 'QP05638511' as provider2 from nathalie.tmp_raw_input where provider in ('A0011660')
+    union
+    select *, 'UNK' as provider2 from nathalie.tmp_raw_input where provider in ('A0012854') or provider is null
 ) as S
 ;
 
@@ -210,232 +253,538 @@ left join
     select idx, provider3 as provider_correct, postdischarge_SNFLTCSAname, source, row_number() over(partition by idx order by source asc, isnull(postdischarge_SNFLTCSAname, 'Z')) as rn
     from
     (
-    
-        --Priority/Source 1: provider field is 10 digit NPI (commonly used for encounters), plandata.provider
-        select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 1 as source
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.npi
-        where substring(B.provid, 1, 1) = 'H' 
-        and B.fullname is not null
-        
-        union
 
-        --Priority/Source 2: provider field is 10 digit NPI (commonly used for encounters), encp.mhc_physician
-        select A.idx 
-            , B.ph_id as provider3
-            , case 
-                    when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name)='2' then trim(B.last_name) 
-                    when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    else concat(trim(B.last_name), trim(B.first_name))
-                end as postdischarge_SNFLTCSAname
-                , 2 as source
-        from nathalie.hand_corrections as A
-        left join encp.mhc_physician as B
-        on A.provider2 = B.npi
-        where concat(trim(B.first_name), trim(B.last_name)) is not null  
-        union
-    
-        --Priority/source 3: provider field matches plandata.provider's provid field.
-        select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 3 as source
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.provid
-        where B.fullname is not null
-        union
-        
-        /*
-        correct provider field by looking for matches across reference tables
-        */
+		--Priority/Source 1: provider field is 10 digit NPI (commonly used for encounters), plandata.provider
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 10 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.npi
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+		and status = 'Active'
 
-        --In the absence of a provid match, backup matches to fedid are used. However each fedid may be associated with several names in
-        --the reference file. Below provtype is ranked so that a SNF name is attached to the data set where several names may have been 
-        --associated to the same prov code in the reference file. 
-        --Recall that: For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital.
-        
-        --Priority/source 4: provider field matches encp.mhc_physician's ph_id field and starts with H --> get provider=ph_id and fullname; not that the first_name='2' etc business is to correct data entry anomalies. 
-        select A.idx, B.ph_id as provider3
-            , case 
-                    when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name)='2' then trim(B.last_name) 
-                    when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    else concat(trim(B.last_name), trim(B.first_name))
-                end  as postdischarge_SNFLTCSAname
-            , 4 as source
-        from nathalie.hand_corrections as A
-        left join encp.mhc_physician as B 
-        on A.provider2 = B.ph_id
-        where concat(trim(B.first_name), trim(B.last_name)) is not null  
-        union
-        
-        -- Priority/source 5: provider field matches plandata.provider's fedid field and the provid corresponding to that provid starts with H --> get provider=provid (via fedid) and fullname.
-        select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 5 as source 
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.fedid
-        where B.fullname is not null
-        
-        union
+		union
 
-        --Priority/source 6: provider field matches encp.mhc_physician's fed_taxid field and the ph_id corresponding to that fed_taxid starts with H --> get provider=ph_id (via fed_taxid) and fullname 
-        select A.idx, B.ph_id as provider3
-            , case 
-                    when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name)='2' then trim(B.last_name) 
-                    when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    else concat(trim(B.last_name), trim(B.first_name))
-                end as postdischarge_SNFLTCSAname
-            , 6 as source 
-        from nathalie.hand_corrections as A
-        left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
-        where concat(trim(B.first_name), trim(B.last_name)) is not null 
-        
-        union
-        
-        --Priority/source 7 through 10: Do not apply 'H' requirement; use plandata.provider
-        --For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient The fact that there are SNFs indicates that I have a capture problem further upstream
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 11 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.npi
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+		
+		union
+	
+		--Priority/Source 2: provider field is 10 digit NPI (commonly used for encounters), encp.mhc_physician
+		select A.idx
+			, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+				, 20 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B
+		on A.provider2 = B.npi
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
+		and (concat(trim(B.first_name), trim(B.last_name)) like '%MED%' or concat(trim(B.first_name), trim(B.last_name)) like '%HEALTH%' or concat(trim(B.first_name), trim(B.last_name)) like '%HOSP%')
 
-        select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 7 as source
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.fedid
-        where B.provtype in ('88') --this is assigned a higher source value to preserve SNF info as much as possible
-        and B.fullname is not null
-        union
-        select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 8 as source
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.fedid
-        where B.provtype in ('16', '70')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
-        and B.fullname is not null
-        union
-        select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 9 as source
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.fedid
-        where B.provtype in ('15', '46')
-        and B.fullname is not null
-        union
-        select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 10 as source -- there is some kind of match to a fullname
-        from nathalie.hand_corrections as A
-        left join plandata.provider as B
-        on A.provider2 = B.fedid
-        where B.fullname is not null
-        union
-        
-        --Priority/source 11 through 12: Do not apply 'H' requirement; use plandata.provider
-        
-        select A.idx, B.ph_id as provider3
-            , case 
-                    when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name)='2' then trim(B.last_name) 
-                    when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    else concat(trim(B.last_name), trim(B.first_name))
-                end as postdischarge_SNFLTCSAname
-            , 11 as source
-        from nathalie.hand_corrections as A
-        left join encp.mhc_physician as B 
-        on A.provider2 = B.ph_id
-        where concat(trim(B.first_name), trim(B.last_name)) is not null  
-        
-        union            
+		union
 
-        select A.idx, B.ph_id as provider3
-            , case 
-                    when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name)='2' then trim(B.last_name) 
-                    when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
-                    else concat(trim(B.last_name), trim(B.first_name))
-                end as postdischarge_SNFLTCSAname
-            , 12 as source 
-        from nathalie.hand_corrections as A
-        left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
-        where concat(trim(B.first_name), trim(B.last_name)) is not null  
-        
-        union
+		select A.idx
+			, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+				, 21 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B
+		on A.provider2 = B.npi
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
 
-        --Priority/source 13: Last resort, use provider2 as fullname and as provider3
-        select A.idx, A.provider2 as provider3, A.provider2 as postdischarge_SNFLTCSAname, 13 as source -- there is no match to a fullname, but A.provider may not be null
-        from nathalie.hand_corrections as A
-        
+		union
+
+	
+		--Priority/source 3: provider field matches plandata.provider's provid field.
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 30 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.provid
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 31 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.provid
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+
+		union
+		
+		/*
+		correct provider field by looking for matches across reference tables
+		*/
+
+		--In the absence of a provid match, backup matches to fedid are used. However each fedid may be associated with several names in
+		--the reference file. Below provtype is ranked so that a SNF name is attached to the data set where several names may have been 
+		--associated to the same prov code in the reference file. 
+		--Recall that: For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital.
+		
+		--Priority/source 4: provider field matches encp.mhc_physician's ph_id field and starts with H --> get provider=ph_id and fullname; not that the first_name='2' etc business is to correct data entry anomalies. 
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 40 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B 
+		on A.provider2 = B.ph_id
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
+		and (concat(trim(B.first_name), trim(B.last_name)) like '%MED%' or concat(trim(B.first_name), trim(B.last_name)) like '%HEALTH%' or concat(trim(B.first_name), trim(B.last_name)) like '%HOSP%')
+
+		union
+
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 41 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B 
+		on A.provider2 = B.ph_id
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
+
+		union
+		
+		-- Priority/source 5: provider field matches plandata.provider's fedid field and the provid corresponding to that provid starts with H --> get provider=provid (via fedid) and fullname.
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 50 as source 
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+
+		union
+
+		select A.idx, B.provid as provider3, B.fullname as postdischarge_SNFLTCSAname, 51 as source 
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where substring(B.provid, 1, 1) = 'H' 
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+
+		union
+
+		--Priority/source 6: provider field matches encp.mhc_physician's fed_taxid field and the ph_id corresponding to that fed_taxid starts with H --> get provider=ph_id (via fed_taxid) and fullname 
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 60 as source 
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
+		and (concat(trim(B.first_name), trim(B.last_name)) like '%MED%' or concat(trim(B.first_name), trim(B.last_name)) like '%HEALTH%' or concat(trim(B.first_name), trim(B.last_name)) like '%HOSP%')
+		
+		union
+		
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 61 as source 
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
+		where substring(B.ph_id, 1, 1) = 'H' 
+		and concat(trim(B.first_name), trim(B.last_name)) is not null 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%VOID%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%DUPLICATE%' 
+		and concat(trim(B.first_name), trim(B.last_name)) not like '%ERROR%'
+		and (B.expiration_date is null or B.expiration_date >= now())
+		
+		union
+		
+		--Priority/source 70 through 91: Do not apply 'H' requirement; use plandata.provider
+		--For provtype, 88=snf, 15=Community Hospital - Outpatient, 46=Rehab Clinic, 70=Acute Psychiatric Hospital - Institution For Mental Disease , 16=Community Hospital - Inpatient The fact that there are SNFs indicates that I have a capture problem further upstream, 60=County Hospital Outpatient , 61=County Hospital Outpatient 
+
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 70 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('88') --this is assigned a higher source value to preserve SNF info as much as possible
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 71 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('88') --this is assigned a higher source value to preserve SNF info as much as possible
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 80 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('16', '70', '60')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 81 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('16', '70', '60')  --this is assigned the next highest source value so that potential inpatient hosp. that are not rehab are preserved
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 90 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('15', '46', '61')
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and (B.fullname like '%MED%' or B.fullname like '%HEALTH%' or B.fullname like '%HOSP%')
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 91 as source
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.provtype in ('15', '46', '61')
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		and status = 'Active'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 100 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.npi
+		where B.fullname is not null
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 101 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.npi
+		where B.fullname is not null
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 110 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.provid
+		where B.fullname is not null
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 111 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.provid
+		where B.fullname is not null
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 120 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.fullname is not null
+		and B.fullname is not null and B.fullname not like '%VOID%' and B.fullname not like '%DUPLICATE%' and B.fullname not like '%ERROR%'
+		
+		union
+		
+		select A.idx, A.provider2 as provider3, B.fullname as postdischarge_SNFLTCSAname, 121 as source -- there is some kind of match to a fullname
+		from nathalie.hand_corrections as A
+		left join plandata.provider as B
+		on A.provider2 = B.fedid
+		where B.fullname is not null
+		
+		union
+		
+		--Priority/source 130 through 140: Do not apply 'H' requirement; use encp.mhc_physician
+		
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 130 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B 
+		on A.provider2 = B.ph_id
+		where concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and (concat(trim(B.first_name), trim(B.last_name)) like '%MED%' or concat(trim(B.first_name), trim(B.last_name)) like '%HEALTH%' or concat(trim(B.first_name), trim(B.last_name)) like '%HOSP%')
+
+		union
+
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 131 as source
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B 
+		on A.provider2 = B.ph_id
+		where concat(trim(B.first_name), trim(B.last_name)) is not null  
+		
+		union            
+
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 141 as source 
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
+		where concat(trim(B.first_name), trim(B.last_name)) is not null  
+		and (concat(trim(B.first_name), trim(B.last_name)) like '%MED%' or concat(trim(B.first_name), trim(B.last_name)) like '%HEALTH%' or concat(trim(B.first_name), trim(B.last_name)) like '%HOSP%')
+
+		union
+
+		select A.idx, B.ph_id as provider3
+			, case 
+					when trim(B.last_name) like '%HOSPITAL' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%FOUNDATION' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%TARZANA' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%COUNTY' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%&' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CENTER' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.last_name) like '%CTR' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name)='2' then trim(B.last_name) 
+					when trim(B.first_name) like 'HOSP%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MED%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CAMPUS%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'REG %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CTR%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'CENTER%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'MONTE COMM%' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'AND %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					when trim(B.first_name) like 'OF %' then concat(trim(B.last_name), ' ', trim(B.first_name))
+					else concat(trim(B.last_name), trim(B.first_name))
+				end as postdischarge_SNFLTCSAname
+			, 140 as source 
+		from nathalie.hand_corrections as A
+		left join encp.mhc_physician as B on A.provider2 = B.fed_taxid
+		where concat(trim(B.first_name), trim(B.last_name)) is not null  
+
+		union
+
+		--Priority/source 13: Last resort, use provider2 as fullname and as provider3
+		select A.idx, A.provider2 as provider3, A.provider2 as postdischarge_SNFLTCSAname, 150 as source -- there is no match to a fullname, but A.provider may not be null
+		from nathalie.hand_corrections as A
+                    
     ) S
     where postdischarge_SNFLTCSAname is not null
 ) PROVNAME_REF
 on A.idx=PROVNAME_REF.idx
 where rn = 1
 ;
-
 
 --Group claims into cases
 
