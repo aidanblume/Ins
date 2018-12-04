@@ -6,12 +6,14 @@ Version Control:    https://dsghe.lacare.org/nblume/Readmissions/tree/master/Cod
 Data Source:        nathalie.prjrea_step9_postdischargeSNF 
 Output:             nathalie.prjrea_step10_ER
 Assumption:         No case logic because it is assumed that an admit date is uniquely tied to an ER visit (i.e. consecutive admit dates are distinct, and ER visits last no more than 24 hrs)
+Issues:             Improve uniquing ER visits. Now, using timestamps that are only precise to the day and that may not take into account multiple daily ER visits. 
+                    select * from swat.claims_universe
+                    where er_ind <> 'non_ER' and carriermemid='90000128D'
+                    order by carriermemid, startdate, claimid
+                    ;
 ***/
 
 drop table if exists nathalie.prjrea_step10_ER 
-;
-
-set max_row_size = 20mb
 ;
 
 create table nathalie.prjrea_step10_ER 
@@ -27,21 +29,22 @@ left join
     from nathalie.prjrea_step9_postdischargeSNF a
     left join 
     (
-        select case_id, cin_no, er_adm_dt
+        select cin_no, er_adm_dt
         from 
         ( --add row number
             select *
-                , row_number() over(partition by cin_no, case_id, er_adm_dt order by source_table asc) as rownumber
+                , row_number() over(partition by cin_no, er_adm_dt order by source_table asc) as rownumber
             from
             (  -- union reports of ER events from 4 sources: claims_universe, & HOAP clm, enc, qnxt tables 
-                select distinct claimid as case_id, carriermemid as cin_no, startdate as er_adm_dt
+                select distinct carriermemid as cin_no, startdate as er_adm_dt
                     , 1 as source_table
                 from SWAT.claims_universe
                 where er_ind not in ('non_ER') -- field value has changed.  / avoidable ED algo. 
+                and (billtype,1,2) in ('11','12', '13', '14') 
                 
                 union
             
-                select distinct hdr.case_id, hdr.cin_no, admit_dt_clm as er_adm_dt --note that admit_dt_clm has uninformative hours: they're always 7 or 8 am
+                select distinct hdr.cin_no, admit_dt_clm as er_adm_dt --note that admit_dt_clm has uninformative hours: they're always 7 or 8 am
                     , 3 as source_table
                 from hoap.clm_hdr_inpsnf hdr join hoap.clm_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
@@ -77,7 +80,7 @@ left join
 
                 union
                 
-                select distinct hdr.case_id, hdr.cin_no, hdr.admit_dt_clm as er_adm_dt 
+                select distinct hdr.cin_no, hdr.admit_dt_clm as er_adm_dt 
                     , 4 as source_table
                 from hoap.enc_hdr_inpsnf hdr join hoap.enc_detail_inpsnf det 
                 on hdr.cin_no=det.cin_no and hdr.cl_id=det.cl_id
