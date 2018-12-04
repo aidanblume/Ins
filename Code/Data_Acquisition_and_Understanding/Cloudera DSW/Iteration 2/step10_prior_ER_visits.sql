@@ -40,7 +40,7 @@ left join
                     , 1 as source_table
                 from SWAT.claims_universe
                 where er_ind not in ('non_ER') -- field value has changed.  / avoidable ED algo. 
-                and (billtype,1,2) in ('11','12', '13', '14') 
+                and substring(billtype,1,2) in ('11','12', '13', '14') 
                 
                 union
             
