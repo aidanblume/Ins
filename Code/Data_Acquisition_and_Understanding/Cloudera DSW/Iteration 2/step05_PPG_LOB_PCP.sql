@@ -298,7 +298,7 @@ left join
                 (
                     select carriermemid, effdate, termdate, ratecode, createdate, lastupdate, planid, eligibleorgid, enrollid
                     from plandata.enrollkeys 
-                    where segtype = 'INT' and ratecode <> 'CMCWELL'
+                    where segtype = 'INT'
                 ) ek
                 on ca.cin_no = ek.carriermemid
                 and ca.adm_dt >= ek.effdate
